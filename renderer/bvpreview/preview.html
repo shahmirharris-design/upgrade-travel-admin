@@ -1,0 +1,18 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src https://fonts.gstatic.com; img-src 'self' data: https:; connect-src https://en.wikipedia.org https://commons.wikimedia.org https://photon.komoot.io https://upload.wikimedia.org;" />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,400;1,500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+<style>
+  /* hosted preview: the overlay fills the frame and scrolls inside it; the customer's own
+     top bar (Download PDF / close) is the host's job here, so it stays hidden */
+  body{ margin:0; background:#1B140C; }
+  .bv-overlay{ position:fixed !important; inset:0 !important; }
+  .bv-bar{ display:none !important; }
+  /* doc mode: the document overlay fills the frame; closing it would leave a blank frame */
+  .acct-modal-close{ display:none !important; }
+  .acct-overlay{ background:#1B140C; }
+</style>
+<script src="boot.js"></script>
+</head><body>
+<div id="ut-account"></div>
+</body></html>

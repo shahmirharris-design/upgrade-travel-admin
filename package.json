@@ -1,0 +1,61 @@
+{
+  "name": "upgrade-travel-admin",
+  "version": "1.0.0",
+  "description": "Upgrade Travel \u2014 back-office admin app (customers, itineraries, quotes)",
+  "author": "Upgrade Travel",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "npm run sync-bv && electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "sync-bv": "cp ../theme/upgrade-travel/assets/account.js renderer/bvpreview/account.js && cp ../theme/upgrade-travel/style.css renderer/bvpreview/style.css && cp ../theme/upgrade-travel/assets/globe-land.js renderer/bvpreview/globe-land.js",
+    "prestart": "npm run sync-bv",
+    "prebuild:mac": "npm run sync-bv",
+    "release": "npm run sync-bv && electron-builder --publish always"
+  },
+  "devDependencies": {
+    "electron": "^31.3.1",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.flyupgrade.admin",
+    "productName": "Upgrade Travel Admin",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "dir"
+      ],
+      "category": "public.app-category.business",
+      "identity": null
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "releaseType": "release"
+      }
+    ],
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
+  }
+}
