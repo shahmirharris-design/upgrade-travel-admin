@@ -367,22 +367,52 @@
     }
     return wrap;
   }
+  /* is this itinerary the signed-in person's own (vs a fellow group member's)? */
+  function itinIsOwn(it) { return (it.user_id && it.user_id === state.uid) || (it.customer_email && state.email && it.customer_email.toLowerCase() === state.email.toLowerCase()); }
+  /* itineraries built together as one group trip share a group_trip_id — cluster them */
+  function tripClusters(its) {
+    var map = {}, order = [], solo = [];
+    its.forEach(function (it) { if (it.group_trip_id) { if (!map[it.group_trip_id]) { map[it.group_trip_id] = { id: it.group_trip_id, items: [] }; order.push(it.group_trip_id); } map[it.group_trip_id].items.push(it); } else solo.push(it); });
+    return { clusters: order.map(function (id) { return map[id]; }), solo: solo };
+  }
+  function groupTitleFromItems(items) { var t = items[0].title || '', i = t.indexOf(' · '); return (i > 0 ? t.slice(0, i) : (items[0].destination || '')) || 'Group trip'; }
+  function travelerList(names) { return (names || '').split(/[\n,]+/).map(function (x) { return x.trim(); }).filter(Boolean); }
+  function tripGroupBox(cluster, coveredFor) {
+    var items = cluster.items.slice();
+    var others = items.filter(function (it) { return !itinIsOwn(it); });
+    var allOwn = others.length === 0; /* one shared login → don't single anyone out */
+    var ordered = allOwn ? items : items.filter(itinIsOwn).concat(others);
+    var travellers = items.reduce(function (n, it) { return n + (it.passengers || travelerList(it.traveler_names).length || 1); }, 0);
+    return h('div', { class: 'trip-group' }, [
+      h('div', { class: 'trip-group-head' }, [
+        h('span', { class: 'trip-group-eyebrow', text: 'Travelling together' }),
+        h('h3', { class: 'trip-group-title', text: groupTitleFromItems(items) }),
+        h('p', { class: 'trip-group-sub', text: items.length + ' itineraries  ·  ' + travellers + ' travellers' })
+      ]),
+      h('div', { class: 'trip-list' }, ordered.map(function (it) { return itinTripCard(it, coveredFor(it), { group: true, own: !allOwn && itinIsOwn(it) }); }))
+    ]);
+  }
   function sectionTrips() {
     var bk = state.bookings || [], its = state.itineraries || [];
     var wrap = h('div', { class: 'acct-section' });
     wrap.appendChild(h('h2', { class: 'acct-h2', text: 'My trips' }));
-    var upIts = its.filter(itinUpcoming), pastIts = its.filter(function (it) { return !itinUpcoming(it); });
+    var tc = tripClusters(its);
     var freeBk = bk.filter(function (b) { return !bookingCoveredBy(b, its); });
     var upBk = freeBk.filter(function (b) { return !b.depart_at || new Date(b.depart_at) >= new Date() || (b.status || '') === 'upcoming'; });
     var pastBk = freeBk.filter(function (b) { return upBk.indexOf(b) < 0; });
     function coveredFor(it) { return bk.filter(function (b) { return bookingCoveredBy(b, [it]) === it || bookingCoveredBy(b, [it]); }); }
-    if (upIts.length || upBk.length) {
+    function clusterUpcoming(c) { return c.items.some(itinUpcoming); }
+    var upClusters = tc.clusters.filter(clusterUpcoming), pastClusters = tc.clusters.filter(function (c) { return !clusterUpcoming(c); });
+    var upSolo = tc.solo.filter(itinUpcoming), pastSolo = tc.solo.filter(function (it) { return !itinUpcoming(it); });
+    if (upClusters.length || upSolo.length || upBk.length) {
       wrap.appendChild(h('h3', { class: 'acct-panel-title acct-subhead', text: 'Upcoming' }));
-      wrap.appendChild(h('div', { class: 'trip-list' }, upIts.map(function (it) { return itinTripCard(it, coveredFor(it)); }).concat(upBk.map(tripCard))));
+      upClusters.forEach(function (c) { wrap.appendChild(tripGroupBox(c, coveredFor)); });
+      if (upSolo.length || upBk.length) wrap.appendChild(h('div', { class: 'trip-list' }, upSolo.map(function (it) { return itinTripCard(it, coveredFor(it)); }).concat(upBk.map(tripCard))));
     }
-    if (pastIts.length || pastBk.length) {
+    if (pastClusters.length || pastSolo.length || pastBk.length) {
       wrap.appendChild(h('h3', { class: 'acct-panel-title acct-subhead', text: 'Past trips' }));
-      wrap.appendChild(h('div', { class: 'trip-list' }, pastIts.map(function (it) { return itinTripCard(it, coveredFor(it)); }).concat(pastBk.map(tripCard))));
+      pastClusters.forEach(function (c) { wrap.appendChild(tripGroupBox(c, coveredFor)); });
+      if (pastSolo.length || pastBk.length) wrap.appendChild(h('div', { class: 'trip-list' }, pastSolo.map(function (it) { return itinTripCard(it, coveredFor(it)); }).concat(pastBk.map(tripCard))));
     }
     if (!its.length && !bk.length) wrap.appendChild(h('div', { class: 'acct-empty' }, [h('p', null, h('strong', { text: 'No trips yet.' })), h('p', { text: 'Your trips and itineraries will appear here.' }), h('a', { class: 'btn btn-primary', href: CONTACT, text: 'Get a quote' })]));
     setTimeout(function () { loadBvImages(wrap); }, 0);
@@ -501,9 +531,27 @@
       document.body.appendChild(holder);
       var opt = { margin: pdfOpt.margin != null ? pdfOpt.margin : [10, 10, 12, 10], filename: filename || 'document.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2, backgroundColor: pdfOpt.bg || '#ffffff', useCORS: true, scrollX: 0, scrollY: 0 }, jsPDF: { unit: 'mm', format: pdfOpt.format || 'a4', orientation: 'portrait' }, pagebreak: { mode: ['css', 'legacy'] } };
       var done = function () { if (holder.parentNode) document.body.removeChild(holder); };
-      var worker = window.html2pdf().set(opt).from(page.firstChild);
-      if (mode === 'open') { worker.toPdf().get('pdf').then(function (pdf) { var url = pdf.output('bloburl'); if (win) win.location.href = url; else window.open(url, '_blank'); done(); }).catch(function () { if (win) win.close(); done(); }); }
-      else { worker.save().then(done).catch(done); }
+      /* a discreet page footer on multi-page documents (skipped on single-page) */
+      var stampPages = function (pdf) {
+        try {
+          var n = pdf.internal.getNumberOfPages();
+          if (n < 2) return pdf;
+          var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(139, 126, 99);
+          for (var i = 1; i <= n; i++) { pdf.setPage(i); pdf.text(agencyName() + '   ·   Page ' + i + ' of ' + n, pw / 2, ph - 4, { align: 'center' }); }
+        } catch (e) { }
+        return pdf;
+      };
+      /* wait for the serif webfont so the PDF embeds it, not a fallback; then render once */
+      var ready = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+      ready.then(function () {
+        window.html2pdf().set(opt).from(page.firstChild).toPdf().get('pdf').then(function (pdf) {
+          stampPages(pdf);
+          if (mode === 'open') { var url = pdf.output('bloburl'); if (win) win.location.href = url; else window.open(url, '_blank'); }
+          else { pdf.save(opt.filename); }
+          done();
+        }).catch(function () { if (win) win.close(); done(); });
+      });
     });
   }
   function openOverlay(docNode, filename, pdfOpt) {
@@ -653,6 +701,11 @@
       h('div', { class: 'ld-footer-tag', text: [(state.settings && state.settings.agency_phone) || '', num || ''].filter(Boolean).join('   ·   ') })
     ]);
   }
+  /* fine print shown on the itinerary (beautiful view + PDF) so nobody treats a stock photo
+     or a scheduled time as a guarantee */
+  function itinDisclaimer() {
+    return 'Photos are for inspiration and may not show the exact room, aircraft or venue. Flight times and schedules can change, and delays happen. We keep an eye on your trip and let you know as soon as we hear of a change. Please check your tickets and confirmations for the final details before you travel.';
+  }
   function ldRouting(row) {
     return h('article', { class: 'ld-card' }, (row.segments || []).map(function (seg, i) {
       var role = segRole(row.trip_type, i, row.segments.length);
@@ -704,6 +757,7 @@
       else if (ev.type === 'ent') doc.appendChild(ldEntCard(++no, ev.x));
     });
     if (it.notes) doc.appendChild(h('div', { class: 'ld-note' }, [h('div', { class: 'ld-sumlabel', text: 'From your specialist' }), h('p', { text: it.notes })]));
+    doc.appendChild(h('p', { class: 'ld-disclaimer', text: itinDisclaimer() }));
     doc.appendChild(ldFooter(it.itinerary_number));
     return doc;
   }
@@ -724,8 +778,9 @@
       setTimeout(function () { if (holder.parentNode) holder.parentNode.removeChild(holder); if (btn) { btn.disabled = false; btn.textContent = t0; } }, 1500);
     }, 300);
   }
-  function itinTripCard(it, coveredBookings) {
-    var card = h('article', { class: 'trip-card itin-card' });
+  function itinTripCard(it, coveredBookings, opts) {
+    opts = opts || {};
+    var card = h('article', { class: 'trip-card itin-card' + (opts.own ? ' itin-card--own' : '') });
     var seq = citySeq(it.segments || []);
     var route = seq.length ? seq.map(function (c) { return c.code; }).join(' → ') : '';
     /* the headline destination photo — first stay city, honoring dad's picked city image */
@@ -738,12 +793,14 @@
     }
     card.appendChild(h('div', { class: 'trip-top' }, [h('div', null, [h('h4', { class: 'trip-route', text: it.title || it.destination || 'Your trip' }), route ? h('p', { class: 'trip-codes', text: route }) : null]), h('span', { class: 'itin-badge', text: 'Itinerary' })]));
     var chips = [];
+    if (opts.own) chips.push(h('span', { class: 'trip-chip trip-chip--you', text: 'Your trip' }));
     var itTtl = tripTypeLabel(it.trip_type); if (itTtl) chips.push(h('span', { class: 'trip-chip trip-chip--type', text: itTtl }));
     if (it.destination) chips.push(h('span', { class: 'trip-chip', text: it.destination }));
     var dates = itinDateRange(it); if (dates) chips.push(h('span', { class: 'trip-chip', text: dates }));
     chips.push(h('span', { class: 'trip-chip', text: paxText(it) }));
     var sv = itinSavings(it); if (sv > 0) chips.push(h('span', { class: 'trip-chip trip-chip--save', text: 'You save ' + money(sv, it.currency) }));
     card.appendChild(h('div', { class: 'trip-meta' }, chips));
+    if (opts.group && it.traveler_names) { var tl = travelerList(it.traveler_names); if (tl.length) card.appendChild(h('p', { class: 'itin-travelers' }, [h('span', { class: 'itin-travelers-k', text: 'Travellers' }), h('span', { text: tl.join(', ') })])); }
     var sum = [], nf = (it.segments || []).length, nh = (it.hotels || []).length, nt = (it.transport || []).length, ne = (it.entertainment || []).length;
     if (nf) sum.push(nf + (nf > 1 ? ' flights' : ' flight'));
     if (nh) sum.push(nh + (nh > 1 ? ' hotels' : ' hotel'));
@@ -1690,6 +1747,7 @@
       h('div', { class: 'bv-brand serif', text: agencyName() }),
       h('div', { class: 'bv-spec' }, [(state.settings && state.settings.agency_phone) ? state.settings.agency_phone : '', h('br'), 'One specialist, yours from first call to boarding.']),
       it.notes ? h('p', { class: 'bv-fine', text: it.notes }) : null,
+      h('p', { class: 'bv-fine bv-disclaimer', text: itinDisclaimer() }),
       h('p', { class: 'bv-fine', text: 'Itinerary ' + (it.itinerary_number || '') })
     ])]));
     return root;
@@ -1971,6 +2029,7 @@
     if (!sess) { viewAuth('signin'); return; }
     syncWpUser(sess);
     var uid = sess.user.id;
+    state.uid = uid; state.email = sess.user.email || '';
     try {
       var pr = await sb.from('profiles').select('*').eq('id', uid).maybeSingle();
       if (pr.error) throw pr.error;

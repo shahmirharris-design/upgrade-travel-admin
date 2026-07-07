@@ -639,3 +639,29 @@ input{ font-family:inherit; }
 .qd-totals{ margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }
 .rev-docframe{ border:1px solid var(--line); border-radius:14px; overflow:hidden; background:#F4EDDF; box-shadow:0 20px 50px -30px rgba(0,0,0,.4); }
 .rev-docframe .rev-bv-iframe{ height:78vh; }
+
+/* ---------- Group trips ---------- */
+.gt-grouplist{ display:flex; flex-direction:column; gap:8px; margin-bottom:12px; }
+.gt-grouprow{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 14px; border:1px solid var(--line); border-radius:11px; background:var(--card); cursor:pointer; text-align:left; }
+.gt-grouprow:hover{ border-color:var(--gold); }
+.gt-grouprow.is-sel{ border-color:var(--gold); background:#fff; box-shadow:0 0 0 2px rgba(169,133,76,.16); }
+.gt-grouprow-main{ display:flex; flex-direction:column; gap:2px; }
+.gt-grouprow-main b{ font-size:14px; color:var(--ink); }
+.gt-grouprow-sub{ font-size:12px; color:var(--stone); }
+.gt-check{ color:var(--gold); font-weight:700; }
+.gt-members{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.gt-chip{ display:inline-flex; align-items:center; gap:7px; padding:6px 11px; border-radius:999px; background:rgba(169,133,76,.12); border:1px solid var(--line); font-size:12.5px; color:var(--ink); }
+.gt-chip-x{ cursor:pointer; color:var(--stone); font-weight:700; line-height:1; background:none; border:none; padding:0; }
+.gt-chip-x:hover{ color:#a3402f; }
+.gt-newgroup{ min-width:340px; }
+.gt-summary{ display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px 18px; border:1px solid var(--line); border-radius:13px; background:var(--card); margin-bottom:20px; }
+.gt-summary-title{ font-family:var(--serif); font-weight:500; font-size:19px; color:var(--ink); }
+.gt-summary-sub{ font-size:12.5px; color:var(--stone); margin-top:4px; }
+.gt-pods{ display:flex; flex-direction:column; gap:10px; margin-bottom:14px; }
+.gt-pod-travelers{ font-size:12px; color:var(--stone); margin-top:5px; }
+.gt-generate{ display:flex; align-items:center; gap:14px; margin-top:26px; padding-top:20px; border-top:1px solid var(--line); }
+.gt-generate .msg{ margin:0; }
+
+.gt-banner{ display:flex; align-items:center; gap:12px; padding:12px 16px; margin-bottom:18px; border:1px solid var(--line); border-left:3px solid var(--gold); border-radius:11px; background:rgba(169,133,76,.07); }
+.gt-banner-tag{ flex:none; font-size:10px; letter-spacing:.16em; text-transform:uppercase; font-weight:700; color:var(--deep); background:var(--gold); padding:4px 9px; border-radius:6px; }
+.gt-banner-text{ font-size:13px; color:var(--ink-2); }
