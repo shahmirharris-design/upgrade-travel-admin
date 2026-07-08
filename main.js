@@ -56,6 +56,24 @@ try { ({ autoUpdater } = require('electron-updater')); } catch (e) { autoUpdater
 function sendUpdateStatus(s) {
   BrowserWindow.getAllWindows().forEach(function (w) { try { w.webContents.send('update-status', s); } catch (e) { /* window gone */ } });
 }
+// a plain log file dad can send if an update still misbehaves (userData/update.log)
+function logUpdate(line) {
+  try {
+    const fs = require('fs'), path = require('path');
+    fs.appendFileSync(path.join(app.getPath('userData'), 'update.log'), new Date().toISOString() + '  ' + line + '\n');
+  } catch (e) { /* ignore */ }
+}
+// Robust install: silent install (no wizard to get stuck on) + force relaunch of the
+// NEW version. window-all-closed's app.quit() can pre-empt the installer, so drop it
+// first, then let quitAndInstall own the shutdown.
+function doQuitAndInstall() {
+  logUpdate('quitAndInstall requested');
+  try { app.removeAllListeners('window-all-closed'); } catch (e) { /* ignore */ }
+  setImmediate(() => {
+    try { autoUpdater.quitAndInstall(true, true); }
+    catch (e) { logUpdate('quitAndInstall threw ' + ((e && e.message) || e)); }
+  });
+}
 function cmpVer(a, b) {
   const pa = String(a).split('.').map(function (n) { return parseInt(n, 10) || 0; });
   const pb = String(b).split('.').map(function (n) { return parseInt(n, 10) || 0; });
@@ -81,9 +99,9 @@ function setupAutoUpdate() {
       message: 'A new version of Upgrade Travel Admin is ready.',
       detail: 'Version ' + (info && info.version ? info.version : '') + ' will be installed when you restart.'
     });
-    if (response === 0) autoUpdater.quitAndInstall();
+    if (response === 0) doQuitAndInstall();
   });
-  autoUpdater.on('error', (err) => { sendUpdateStatus({ state: 'error', message: (err && err.message) || 'Update failed.' }); console.warn('update error:', err && err.message); });
+  autoUpdater.on('error', (err) => { logUpdate('error ' + ((err && err.stack) || (err && err.message) || err)); sendUpdateStatus({ state: 'error', message: (err && err.message) || 'Update failed.' }); console.warn('update error:', err && err.message); });
   try { autoUpdater.checkForUpdates(); } catch (e) { /* offline or dev, ignore */ }
 }
 
