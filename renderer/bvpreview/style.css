@@ -2000,3 +2000,15 @@ p, .ld-prose, .bv-day-text, .quote-note{ text-wrap: pretty; }
 .ld-payline{ margin:6px 0 0; font-size:14px; color:#211B12; }
 .ld-payline b{ color:#7A5E29; font-weight:600; }
 .ld-paylink{ color:#6B4F1D; text-decoration:underline; text-underline-offset:2px; word-break:break-all; }
+
+/* request-a-change overlay */
+.cr-overlay{ position:fixed; inset:0; z-index:250; background:rgba(15,10,5,.6); display:flex; align-items:center; justify-content:center; padding:20px; }
+.cr-box{ width:min(520px, 100%); background:#F4EDDF; color:#211B12; border-radius:16px; padding:28px 26px; box-shadow:0 40px 90px -30px rgba(0,0,0,.7); }
+.cr-title{ font-size:26px; margin:0 0 6px; }
+.cr-sub{ margin:0 0 16px; font-size:14px; color:#5A5142; line-height:1.6; }
+.cr-text{ width:100%; }
+.cr-msg{ font-size:13px; margin:8px 0 0; min-height:18px; }
+.cr-msg.err{ color:#A3402F; }
+.cr-actions{ display:flex; gap:10px; margin-top:14px; }
+.cr-actions .btn{ width:auto; padding:11px 18px; }
+.cr-done{ text-align:left; }

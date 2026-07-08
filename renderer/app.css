@@ -855,3 +855,15 @@ input{ font-family:inherit; }
 .payopt-list{ display:flex; flex-wrap:wrap; gap:10px 18px; }
 .payopt{ display:inline-flex; align-items:center; gap:8px; font-size:13.5px; color:var(--ink); cursor:pointer; }
 .payopt input{ width:16px; height:16px; accent-color: var(--gold); cursor:pointer; }
+
+/* customer past-trips ledger */
+.cd-book-hint{ font-size:12px; color:var(--stone); margin:0 0 10px; line-height:1.5; }
+.cd-book-row{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
+.cd-book-row:last-of-type{ border-bottom:0; }
+.cd-book-main{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.cd-book-main b{ font-size:13.5px; color:var(--ink); }
+.cd-book-sub{ font-size:12px; color:var(--stone); }
+.cd-book-del{ margin-left:auto; border:0; background:none; color:var(--stone); font-size:17px; cursor:pointer; }
+.cd-book-del:hover{ color:#a3402f; }
+.cd-book-form{ margin-top:12px; padding-top:12px; border-top:1px dashed var(--line); }
+.trip-st-itinerary .trip-stage-dot{ background:var(--gold); }

@@ -676,13 +676,17 @@
     return wrap;
   }
   function tripFilters() {
-    var presets = [['all', 'All'], ['upcoming', 'Upcoming'], ['quoted', 'Quoted'], ['booked', 'Booked'], ['ticketed', 'Ticketed'], ['traveled', 'Travelled']];
+    var presets = [['all', 'All'], ['upcoming', 'Upcoming'], ['quoted', 'Quoted'], ['booked', 'Booked'], ['ticketed', 'Ticketed'], ['itinerary', 'Itinerary sent'], ['traveled', 'Travelled']];
     return h('div', { class: 'rep-presets', style: 'margin-bottom:18px' }, presets.map(function (pr) {
       return h('button', { type: 'button', class: 'rep-chip trip-chip' + ((state.tripFilter || 'all') === pr[0] ? ' is-on' : ''), 'data-f': pr[0], onclick: function () { state.tripFilter = pr[0]; Array.prototype.forEach.call(document.querySelectorAll('.trip-chip'), function (c) { c.classList.toggle('is-on', c.getAttribute('data-f') === pr[0]); }); renderTrips(); }, text: pr[1] });
     }));
   }
   function makeTrip(kind, row) {
     var seg = (row.segments || [])[0], depart = seg && seg.depart_date ? seg.depart_date : null;
+    if (kind === 'itinerary') {
+      var over = row.end_date && row.end_date < todayISO();
+      return { kind: kind, row: row, number: row.itinerary_number, depart: row.start_date || depart, route: quoteRouteLabel(row) || row.destination, stage: over ? 'traveled' : 'itinerary', email: row.customer_email };
+    }
     var stage = kind === 'quote' ? 'quoted' : (row.status === 'traveled' ? 'traveled' : (row.status === 'ticketed' ? 'ticketed' : 'booked'));
     return { kind: kind, row: row, number: row.quote_number || row.invoice_number, depart: depart, route: quoteRouteLabel(row), stage: stage, email: row.customer_email };
   }
@@ -690,12 +694,20 @@
     var box = document.getElementById('trips-body'); if (!box) return;
     var res = await Promise.all([
       sb.from('quotes').select('id, quote_number, customer_email, segments, total_charged, currency, status').eq('status', 'sent').order('created_at', { ascending: false }),
-      sb.from('invoices').select('id, invoice_number, customer_email, segments, total_charged, amount_paid, currency, status, created_at').order('created_at', { ascending: false })
+      sb.from('invoices').select('id, invoice_number, customer_email, segments, total_charged, amount_paid, currency, status, created_at').order('created_at', { ascending: false }),
+      sb.from('itineraries').select('*').eq('status', 'sent').order('created_at', { ascending: false }).limit(200)
     ]);
     box = document.getElementById('trips-body'); if (!box) return;
     var trips = [];
     (res[0].data || []).forEach(function (q) { trips.push(makeTrip('quote', q)); });
-    (res[1].data || []).forEach(function (i) { trips.push(makeTrip('invoice', i)); });
+    var invByNum = {};
+    (res[1].data || []).forEach(function (i) { var t = makeTrip('invoice', i); trips.push(t); if (i.invoice_number) invByNum[i.invoice_number] = t; });
+    /* an itinerary whose pricing came from an invoice IS that trip: annotate instead of duplicating */
+    (res[2].data || []).forEach(function (it) {
+      var linked = it.price_invoice_number && invByNum[it.price_invoice_number];
+      if (linked) { linked.hasItin = it; return; }
+      trips.push(makeTrip('itinerary', it));
+    });
     trips.sort(function (a, b) { if (!a.depart && !b.depart) return 0; if (!a.depart) return 1; if (!b.depart) return -1; return a.depart.localeCompare(b.depart); });
     state.trips = trips;
     renderTrips();
@@ -714,7 +726,7 @@
   }
   function tripCard(t) {
     var row = t.row, cur = row.currency || 'USD', today = todayISO();
-    var stageLabels = { quoted: 'Quoted', booked: 'Booked', ticketed: 'Ticketed', traveled: 'Travelled' };
+    var stageLabels = { quoted: 'Quoted', booked: 'Booked', ticketed: 'Ticketed', itinerary: 'Itinerary sent', traveled: 'Travelled' };
     var bits = [t.number, t.route, money(dnum(row.total_charged), cur)];
     var departTxt = t.depart ? fmtDate(t.depart) : 'No date';
     var departCls = t.depart && t.stage !== 'traveled' ? (t.depart < today ? ' is-over' : (t.depart <= addDays(today, 7) ? ' is-soon' : '')) : '';
@@ -724,7 +736,9 @@
       payBadge = h('span', { class: 'sq-badge inv-st-' + st, text: st === 'paid' ? 'Paid' : st === 'partial' ? 'Partial' : 'Unpaid' });
     }
     var actions = [];
-    if (t.kind === 'quote') actions.push(h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:7px 13px', onclick: function () { convertQuoteToInvoice(row); }, text: '→ Invoice' }));
+    if (t.hasItin) actions.push(h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:7px 13px', onclick: function () { adminOverlay(itinDetail(t.hasItin), 'Itinerary ' + (t.hasItin.itinerary_number || '')); }, text: 'Itinerary ✓' }));
+    if (t.kind === 'itinerary') actions.push(h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:7px 13px', onclick: function () { adminOverlay(itinDetail(row), 'Itinerary ' + (row.itinerary_number || '')); }, text: 'View' }));
+    else if (t.kind === 'quote') actions.push(h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:7px 13px', onclick: function () { convertQuoteToInvoice(row); }, text: '→ Invoice' }));
     else if (t.stage === 'booked') actions.push(h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:7px 13px', onclick: function () { advanceTrip(row, 'ticketed'); }, text: 'Mark ticketed' }));
     else if (t.stage === 'ticketed') actions.push(h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:7px 13px', onclick: function () { advanceTrip(row, 'traveled'); }, text: 'Mark travelled' }));
     else actions.push(h('span', { class: 'trip-done', text: '✓ Done' }));
@@ -844,6 +858,7 @@
       group('Travel documents', [kv('Passport number', p.passport_number), kv('Passport expiry', fmtDate(p.passport_expiry)), kv('Nationality', p.nationality), kv('Country of residence', p.country_of_residence), kv('Known Traveler / TSA', p.known_traveler_number), kv('Redress number', p.redress_number)]),
       group('Preferences', [kv('Cabin', p.cabin_pref), kv('Seat', p.seat_pref), kv('Meal', p.meal_pref), kv('Frequent flyer', p.frequent_flyer)]),
       group('Emergency contact', [kv('Name', p.emergency_contact_name), kv('Phone', p.emergency_contact_phone), kv('Relationship', rel)]),
+      h('div', { id: 'cd-bookings', class: 'cd-group' }, [h('h4', { text: 'Past trips & savings ledger' }), h('div', { class: 'cd-hist-loading', text: 'Loading…' })]),
       h('div', { id: 'cd-crm', class: 'cd-group cd-crm' }, [h('h4', { text: 'Concierge notes' }), h('div', { class: 'cd-hist-loading', text: 'Loading notes…' })]),
       h('div', { id: 'cd-history', class: 'cd-group cd-history' }, [h('h4', { text: 'History' }), h('div', { class: 'cd-hist-loading', text: 'Loading…' })]),
       h('div', { class: 'cd-actions' }, [
@@ -854,7 +869,67 @@
       ])
     ]);
     right.appendChild(card);
-    setTimeout(function () { loadCustomerHistory(p); loadCustomerCRM(p); }, 0);
+    setTimeout(function () { loadCustomerHistory(p); loadCustomerCRM(p); loadCustBookings(p); }, 0);
+  }
+  /* the legacy savings ledger: trips from before the app era, so lifetime savings are honest */
+  async function loadCustBookings(p) {
+    var box = document.getElementById('cd-bookings'); if (!box) return;
+    var r = await sb.from('bookings').select('*').ilike('customer_email', p.email || '').order('depart_at', { ascending: false });
+    box = document.getElementById('cd-bookings'); if (!box) return;
+    box.textContent = '';
+    box.appendChild(h('h4', { text: 'Past trips & savings ledger' }));
+    box.appendChild(h('p', { class: 'cd-book-hint', text: 'Trips from before the app. They count toward the customer\u2019s lifetime savings. New trips come from itineraries and invoices automatically.' }));
+    var rows = r.data || [];
+    rows.forEach(function (b) {
+      var route = [b.from_city, b.to_city].filter(Boolean).join(' → ');
+      var bits = [b.airline, b.depart_at ? fmtDate(b.depart_at) : '', (Number(b.amount_saved) > 0 ? 'saved ' + money(dnum(b.amount_saved), b.currency || 'USD') : '')].filter(Boolean).join('  ·  ');
+      box.appendChild(h('div', { class: 'cd-book-row' }, [
+        h('div', { class: 'cd-book-main' }, [h('b', { text: route || b.hotel_name || 'Trip' }), h('span', { class: 'cd-book-sub', text: bits })]),
+        h('button', { type: 'button', class: 'cd-book-del', title: 'Remove', onclick: function () { confirmDialog({ title: 'Remove past trip', message: 'Remove “' + (route || 'this trip') + '\u201d from the ledger?', detail: 'The customer\u2019s lifetime savings drop by ' + money(dnum(b.amount_saved), b.currency || 'USD') + '.', danger: true, confirmText: 'Remove', onConfirm: function () { sb.from('bookings').delete().eq('id', b.id).then(function () { loadCustBookings(p); }); } }); }, text: '×' })
+      ]));
+    });
+    if (!rows.length) box.appendChild(h('p', { class: 'cd-book-none', text: 'Nothing logged yet.' }));
+    var formOpen = false;
+    var addBtn = h('button', { type: 'button', class: 'inv-addline', text: '+ Log a past trip' });
+    var formHost = h('div');
+    addBtn.addEventListener('click', function () {
+      if (formOpen) return; formOpen = true; addBtn.style.display = 'none';
+      var f = h('div', { class: 'cd-book-form' }, [
+        h('div', { class: 'inv-row2' }, [
+          h('label', { class: 'inv-field' }, [h('span', { text: 'From (city)' }), h('input', { class: 'inv-input', id: 'bk-from', type: 'text', autocomplete: 'off' })]),
+          h('label', { class: 'inv-field' }, [h('span', { text: 'To (city)' }), h('input', { class: 'inv-input', id: 'bk-to', type: 'text', autocomplete: 'off' })])
+        ]),
+        h('div', { class: 'inv-row2' }, [
+          h('label', { class: 'inv-field' }, [h('span', { text: 'Airline (optional)' }), h('input', { class: 'inv-input', id: 'bk-air', type: 'text', autocomplete: 'off' })]),
+          h('label', { class: 'inv-field' }, [h('span', { text: 'Departure date' }), h('input', { class: 'inv-input', id: 'bk-dep', type: 'date' })])
+        ]),
+        h('div', { class: 'inv-row2' }, [
+          h('label', { class: 'inv-field' }, [h('span', { text: 'They paid' }), h('input', { class: 'inv-input', id: 'bk-paid', type: 'number', min: '0', step: '0.01' })]),
+          h('label', { class: 'inv-field' }, [h('span', { text: 'Retail price elsewhere' }), h('input', { class: 'inv-input', id: 'bk-retail', type: 'number', min: '0', step: '0.01' })])
+        ]),
+        h('div', { style: 'display:flex; gap:10px; align-items:center' }, [
+          h('button', { type: 'button', class: 'btn btn-primary', style: 'width:auto; padding:9px 16px', onclick: function (e) { saveCustBooking(p, e.target); }, text: 'Save trip' }),
+          h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:9px 14px', onclick: function () { formHost.textContent = ''; formOpen = false; addBtn.style.display = ''; }, text: 'Cancel' }),
+          h('span', { id: 'bk-msg', class: 'cd-crm-saved' })
+        ])
+      ]);
+      formHost.appendChild(f);
+      initDatePickers(f);
+    });
+    box.appendChild(addBtn); box.appendChild(formHost);
+  }
+  async function saveCustBooking(p, btn) {
+    var msg = document.getElementById('bk-msg');
+    var paid = parseFloat(val('bk-paid')), retail = parseFloat(val('bk-retail'));
+    if (isNaN(paid)) paid = 0; if (isNaN(retail)) retail = 0;
+    var fromC = val('bk-from'), toC = val('bk-to');
+    if (!fromC && !toC) { if (msg) { msg.textContent = 'Add at least the route.'; msg.className = 'cd-crm-saved err'; } return; }
+    btn.disabled = true; btn.textContent = 'Saving…';
+    var row = { customer_email: p.email, user_id: p.id, status: 'traveled', from_city: fromC || null, to_city: toC || null, airline: val('bk-air') || null, depart_at: val('bk-dep') || null, amount_charged: paid || null, retail_price: retail || null, amount_saved: (retail > paid ? retail - paid : 0) || null, currency: (state.settings && state.settings.default_currency) || 'USD' };
+    var r = await sb.from('bookings').insert(row);
+    btn.disabled = false; btn.textContent = 'Save trip';
+    if (r.error) { if (msg) { msg.textContent = r.error.message || 'Could not save.'; msg.className = 'cd-crm-saved err'; } return; }
+    loadCustBookings(p);
   }
   var EDIT_FIELDS = [
     ['Identity', [['title', 'Title', 'text'], ['first_name', 'First name', 'text'], ['middle_name', 'Middle name', 'text'], ['last_name', 'Last name', 'text'], ['gender', 'Gender', 'text'], ['date_of_birth', 'Date of birth', 'date']]],

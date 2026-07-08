@@ -336,7 +336,14 @@
     /* savings across everything, without double-counting bookings an itinerary already covers */
     var savedBk = bk.reduce(function (s, b) { if (bookingCoveredBy(b, its)) return s; var v = Number(b.amount_saved); return s + (isNaN(v) ? 0 : v); }, 0);
     var savedIt = its.reduce(function (s, it) { return s + itinSavings(it); }, 0);
-    var saved = savedBk + savedIt;
+    /* invoice-only trips count too, unless an itinerary already carries that invoice's pricing */
+    var savedInv = ivs.reduce(function (s, iv) {
+      var comp = Number(iv.comparable_total) || 0, tot = Number(iv.total_charged) || 0;
+      if (!(comp > tot)) return s;
+      var covered = its.some(function (it) { return it.price_invoice_number && iv.invoice_number && it.price_invoice_number === iv.invoice_number; });
+      return covered ? s : s + (comp - tot);
+    }, 0);
+    var saved = savedBk + savedIt + savedInv;
     if (saved > 0) wrap.appendChild(h('div', { class: 'saved-stat' }, [
       h('span', { class: 'saved-eyebrow', text: 'Total saved with Upgrade Travel' }),
       h('span', { class: 'saved-amount', text: money(saved, (bk[0] && bk[0].currency) || (its[0] && its[0].currency) || 'USD') })
@@ -1091,7 +1098,8 @@
       ['Quote', q.quote_number ? 'No. ' + q.quote_number : ''],
       ['Issued', fmtDate(q.created_at || new Date().toISOString())],
       ['Valid until', q.valid_until ? fmtDate(q.valid_until) : ''],
-      ['Travelers', paxText(q)]
+      ['Travelers', paxText(q)],
+      ['Ref', q.booking_reference || '']
     ]));
     var qDest = ((q.segments && q.segments[0] && q.segments[0].to && q.segments[0].to.city) || (q.destination || '').split(',')[0] || '').trim();
     if (qDest) doc.appendChild(h('section', { class: 'ld-banner ld-banner--doc' }, [h('div', { class: 'ld-banner-img bv-ph', 'data-city': qDest }), h('div', { class: 'ld-banner-cap' }, [h('div', { class: 'ld-banner-eyebrow', text: 'Your journey to' }), h('h2', { class: 'ld-banner-city', text: qDest })])]));
@@ -2180,9 +2188,44 @@
       if (pills) g.from(ov.querySelectorAll('.bv-pill'), { y: 20, opacity: 0, duration: 0.7, stagger: 0.12, ease: 'power3.out', scrollTrigger: { trigger: pills, scroller: ov, start: 'top 90%' } });
     }
   }
+  /* a change request goes straight to the specialist: a task in the admin and a Telegram ping */
+  function openChangeRequest(it) {
+    if (document.getElementById('cr-overlay')) return;
+    var ta = h('textarea', { class: 'acct-input cr-text', rows: '4', placeholder: 'Tell us what you would like to change. Dates, rooms, seats, anything.' });
+    var msg = h('p', { class: 'cr-msg', text: '' });
+    var send = h('button', { type: 'button', class: 'btn btn-primary', text: 'Send to my specialist' });
+    var ov = h('div', { id: 'cr-overlay', class: 'cr-overlay', 'data-lenis-prevent': '' }, [
+      h('div', { class: 'cr-box' }, [
+        h('h3', { class: 'cr-title serif', text: 'Request a change' }),
+        h('p', { class: 'cr-sub', text: 'Your specialist gets this immediately and will confirm every change with you before anything is rebooked.' }),
+        ta, msg,
+        h('div', { class: 'cr-actions' }, [send, h('button', { type: 'button', class: 'btn btn-ghost', onclick: function () { ov.remove(); }, text: 'Cancel' })])
+      ])
+    ]);
+    ov.addEventListener('click', function (e) { if (e.target === ov) ov.remove(); });
+    send.addEventListener('click', function () {
+      var text = (ta.value || '').trim();
+      if (text.length < 5) { msg.textContent = 'Add a few words about what you would like changed.'; msg.className = 'cr-msg err'; return; }
+      send.disabled = true; send.textContent = 'Sending…';
+      sb.functions.invoke('change-request', { body: { itinerary_id: it.id, message: text } }).then(function (r) {
+        var err = (r.error && r.error.message) || (r.data && r.data.error);
+        if (err) { send.disabled = false; send.textContent = 'Send to my specialist'; msg.textContent = 'Could not send: ' + err; msg.className = 'cr-msg err'; return; }
+        msg.textContent = '';
+        ov.querySelector('.cr-box').textContent = '';
+        ov.querySelector('.cr-box').appendChild(h('div', { class: 'cr-done' }, [
+          h('h3', { class: 'cr-title serif', text: 'Sent.' }),
+          h('p', { class: 'cr-sub', text: 'Your specialist has it and will be in touch shortly.' }),
+          h('button', { type: 'button', class: 'btn btn-primary', onclick: function () { ov.remove(); }, text: 'Done' })
+        ]));
+      }).catch(function () { send.disabled = false; send.textContent = 'Send to my specialist'; msg.textContent = 'Could not send. Please try again.'; msg.className = 'cr-msg err'; });
+    });
+    document.body.appendChild(ov);
+    ta.focus();
+  }
   function openBeautiful(it) {
     closeBeautiful();
     var bar = h('div', { class: 'bv-bar no-print' }, [
+      state.uid ? h('button', { type: 'button', class: 'bv-bar-pdf', onclick: function () { openChangeRequest(it); }, text: 'Request a change' }) : null,
       h('button', { type: 'button', class: 'bv-bar-pdf', onclick: function () { closeBeautiful(); openOverlay(itinDoc(it), itinPdfName(it), LD_PDF); }, text: 'View PDF' }),
       h('button', { type: 'button', class: 'bv-bar-close', onclick: closeBeautiful, 'aria-label': 'Close', text: '×' })
     ]);
