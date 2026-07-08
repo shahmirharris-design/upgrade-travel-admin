@@ -2186,7 +2186,8 @@
     }
     var f = resolve(req.route_from), t = resolve(req.route_to);
     var pd = parseToISODate(req.depart), rd = parseToISODate(req.return_date);
-    var tt = req.trip_type || (rd ? 'round' : 'one_way');
+    /* quote_requests.trip_type holds the travel PURPOSE (Personal/Business), not the shape; a return date means round trip */
+    var tt = rd ? 'round' : 'one_way';
     var segs = [];
     if (f && t) {
       segs.push({ airline: null, cabin: req.cabin || 'Business Class', from: f, to: t, depart_date: pd });
