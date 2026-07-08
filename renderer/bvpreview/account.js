@@ -581,34 +581,30 @@
         } catch (e) { }
         return pdf;
       };
-      /* every page one solid paper sheet: the canvas is stretched to an exact page multiple
-         (so the last page has no white remainder) and the margin strips are painted paper */
-      var mArr = Array.isArray(opt.margin) ? opt.margin : [opt.margin, opt.margin, opt.margin, opt.margin];
-      var paintPages = function (pdf) {
-        if (!pdfOpt.pageBg) return pdf;
+      /* every page one solid paper sheet: wrap the document's top-level blocks so page breaks
+         land BETWEEN them (each wrapper's transparent border is the air at the top of a page),
+         and stretch the canvas to an exact page multiple so the last page has no white remainder.
+         This runs on the CLONE only; the on-screen overlay is untouched. */
+      if (pdfOpt.fill) {
         try {
-          var pn = pdf.internal.getNumberOfPages(), pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
-          pdf.setFillColor(pdfOpt.pageBg[0], pdfOpt.pageBg[1], pdfOpt.pageBg[2]);
-          for (var pi = 1; pi <= pn; pi++) {
-            pdf.setPage(pi);
-            if (mArr[0] > 0) pdf.rect(0, 0, pw, mArr[0] + 0.6, 'F');
-            if (mArr[2] > 0) pdf.rect(0, ph - mArr[2] - 0.6, pw, mArr[2] + 0.6, 'F');
-            if (mArr[1] > 0) pdf.rect(pw - mArr[1] - 0.6, 0, mArr[1] + 0.6, ph, 'F');
-            if (mArr[3] > 0) pdf.rect(0, 0, mArr[3] + 0.6, ph, 'F');
-          }
-        } catch (e) { }
-        return pdf;
-      };
-      if (pdfOpt.pageBg) {
-        try {
+          var rootEl = page.firstChild;
+          var KEEP = ['ld-card', 'ld-note', 'ld-banner', 'ld-group-label', 'ld-charges', 'ld-save', 'ld-terms', 'ld-footer', 'ld-disclaimer', 'ld-party', 'ld-day'];
+          Array.prototype.slice.call(rootEl.children).forEach(function (el) {
+            var cl = el.classList, hit = false;
+            for (var ki = 0; ki < KEEP.length; ki++) { if (cl.contains(KEEP[ki])) { hit = true; break; } }
+            if (!hit) return;
+            var wrapEl = document.createElement('div');
+            wrapEl.className = 'ld-keep' + (cl.contains('ld-page') ? ' ld-page' : '');
+            cl.remove('ld-page');
+            rootEl.insertBefore(wrapEl, el);
+            wrapEl.appendChild(el);
+          });
           var dims = (opt.jsPDF.format === 'letter') ? [215.9, 279.4] : [210, 297];
-          var innerW = dims[0] - mArr[1] - mArr[3], innerH = dims[1] - mArr[0] - mArr[2];
-          var nodeEl = page.firstChild;
-          var wPx = nodeEl.getBoundingClientRect().width || nodeEl.offsetWidth;
-          if (wPx > 0 && innerW > 0 && innerH > 0) {
-            var pxPerMm = wPx / innerW, contentHpx = innerH * pxPerMm;
-            var pagesN = Math.max(1, Math.ceil(nodeEl.scrollHeight / contentHpx));
-            nodeEl.style.minHeight = Math.ceil(pagesN * contentHpx) + 'px';
+          var wPx = rootEl.getBoundingClientRect().width || rootEl.offsetWidth;
+          if (wPx > 0) {
+            var pxPerMm = wPx / dims[0], pageHpx = dims[1] * pxPerMm;
+            var pagesN = Math.max(1, Math.ceil(rootEl.scrollHeight / pageHpx));
+            rootEl.style.minHeight = Math.ceil(pagesN * pageHpx) + 'px';
           }
         } catch (e) { }
       }
@@ -616,7 +612,6 @@
       var ready = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
       ready.then(function () {
         window.html2pdf().set(opt).from(page.firstChild).toPdf().get('pdf').then(function (pdf) {
-          paintPages(pdf);
           stampPages(pdf);
           if (mode === 'open') { var url = pdf.output('bloburl'); if (win) win.location.href = url; else window.open(url, '_blank'); }
           else { pdf.save(opt.filename); }
@@ -651,13 +646,31 @@
     pairs.forEach(function (p) { if (!p || !p[1]) return; kids.push(h('span', { class: 'ld-pill' }, p[0] ? [h('b', { text: p[0] }), ' ' + p[1]] : ['' + p[1]])); });
     return kids.length ? h('div', { class: 'ld-meta' }, kids) : null;
   }
-  function ldCard(no, title, subtitle, kids) {
+  /* one gold icon per booking type, so a page skims like a real travel wallet */
+  function ldIcon(kind) {
+    var P = { 'stroke-linecap': 'round', 'stroke-linejoin': 'round' };
+    function svg(kids, fill) {
+      return sv('svg', { viewBox: '0 0 24 24', width: '20', height: '20', fill: fill ? 'currentColor' : 'none', stroke: fill ? 'none' : 'currentColor', 'stroke-width': '1.6', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' }, kids);
+    }
+    var icons = {
+      flight: function () { return svg([sv('path', { d: 'M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.2.6-.6.5-1.1z' })], true); },
+      hotel: function () { return svg([sv('path', { d: 'M2 20v-8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8' }), sv('path', { d: 'M2 20h20' }), sv('path', { d: 'M4 10V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4' }), sv('path', { d: 'M6 14h4v6' })]); },
+      transport: function () { return svg([sv('path', { d: 'M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2' }), sv('circle', { cx: '7', cy: '17', r: '2' }), sv('path', { d: 'M9 17h6' }), sv('circle', { cx: '17', cy: '17', r: '2' })]); },
+      dining: function () { return svg([sv('path', { d: 'M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2' }), sv('path', { d: 'M7 2v20' }), sv('path', { d: 'M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3zm0 0v7' })]); },
+      experience: function () { return svg([sv('path', { d: 'M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z' }), sv('path', { d: 'M13 5v2' }), sv('path', { d: 'M13 11v2' }), sv('path', { d: 'M13 17v2' })]); },
+      cruise: function () { return svg([sv('path', { d: 'M22 18H2a4 4 0 0 0 4 4h12a4 4 0 0 0 4-4Z' }), sv('path', { d: 'M21 14 10 2 3 14h18Z' }), sv('path', { d: 'M10 2v16' })]); }
+    };
+    var make = icons[kind];
+    return make ? h('span', { class: 'ld-ic' }, [make()]) : null;
+  }
+  function ldCard(no, title, subtitle, kids, kind) {
     return h('section', { class: 'ld-card' }, [
       h('div', { class: 'ld-card-head' }, [
         h('div', { class: 'ld-no', text: ('0' + no).slice(-2) }),
-        h('div', null, [h('h2', { class: 'ld-title', text: title }), subtitle ? h('div', { class: 'ld-subtitle', text: subtitle }) : null])
+        h('div', { class: 'ld-card-head-main' }, [h('h2', { class: 'ld-title', text: title }), subtitle ? h('div', { class: 'ld-subtitle', text: subtitle }) : null]),
+        kind ? ldIcon(kind) : null
       ]),
-      h('div', { class: 'ld-sumlabel', text: 'Booking Summary' })
+      h('div', { class: 'ld-sumlabel', text: kind === 'flight' ? 'Flight Details' : 'Booking Summary' })
     ].concat(kids || []));
   }
   function ldFlightCard(no, s, prev) {
@@ -667,13 +680,32 @@
       kids.push(h('div', { class: 'ld-layover', text: bvLayoverWord(s) + (lc ? ' in ' + lc : '') + (ld ? '  ·  ' + ld + ' on the ground' : '') + (s.layover_note ? ' — ' + s.layover_note : '') }));
     }
     var ad = s.arrive_date || s.return_date || bvArriveDate(s);
+    var dt = s.depart_time ? fmtTime(s.depart_time) : '', at = s.arrive_time ? fmtTime(s.arrive_time) : '';
+    function apLine(a, term) {
+      if (!a) return '';
+      var base = a.name || [a.city, a.country].filter(Boolean).join(', ');
+      return [base, term ? 'Terminal ' + term : ''].filter(Boolean).join('  ·  ');
+    }
+    kids.push(h('div', { class: 'ld-flight' }, [
+      h('div', { class: 'ld-fl-end' }, [
+        h('div', { class: 'ld-fl-lab', text: 'Departure' + (s.depart_date ? ' · ' + fmtDate(s.depart_date) : '') }),
+        h('div', { class: 'ld-fl-time', text: dt || (s.from && s.from.city) || '' }),
+        h('div', { class: 'ld-fl-code', text: (s.from && s.from.code) || '' }),
+        h('div', { class: 'ld-fl-ap', text: apLine(s.from, s.dep_terminal) })
+      ]),
+      h('div', { class: 'ld-fl-mid' }, [
+        h('div', { class: 'ld-fl-dur', text: s.duration ? s.duration + (/nonstop/i.test(s.duration) ? '' : ' · Nonstop') : 'Nonstop' }),
+        h('div', { class: 'ld-fl-line' }, [sv('svg', { viewBox: '0 0 24 24', width: '15', height: '15', fill: 'currentColor', 'aria-hidden': 'true' }, [sv('path', { d: 'M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.2.6-.6.5-1.1z' })])]),
+        h('div', { class: 'ld-fl-no', text: [s.flight_number, s.aircraft].filter(Boolean).join('  ·  ') })
+      ]),
+      h('div', { class: 'ld-fl-end ld-fl-arr' }, [
+        h('div', { class: 'ld-fl-lab', text: 'Arrival' + (ad ? ' · ' + fmtDate(ad) : (s.depart_date ? ' · ' + fmtDate(s.depart_date) : '')) }),
+        h('div', { class: 'ld-fl-time', text: at || (s.to && s.to.city) || '' }),
+        h('div', { class: 'ld-fl-code', text: (s.to && s.to.code) || '' }),
+        h('div', { class: 'ld-fl-ap', text: apLine(s.to, s.arr_terminal) })
+      ])
+    ]));
     kids.push(ldPills([
-      ['Date', s.depart_date ? fmtDate(s.depart_date) : ''],
-      ['Departs', s.depart_time ? fmtTime(s.depart_time) : ''],
-      ['Arrives', s.arrive_time ? (fmtTime(s.arrive_time) + (ad && ad !== s.depart_date ? ' on ' + fmtDate(ad) : '')) : ''],
-      ['Duration', s.duration || ''],
-      ['Aircraft', s.aircraft || ''],
-      ['Terminal', [s.dep_terminal, s.arr_terminal].filter(Boolean).join(' → ')],
       ['Seats', seatStr(s.seats)],
       ['Baggage', bagStr(s.baggage)],
       ['Confirmation', s.confirmation || ''],
@@ -683,7 +715,7 @@
     var sub = [s.airline, s.cabin, s.flight_number].filter(Boolean).join('  ·  ');
     if (bvCodeshare(s)) sub += '  ·  Operated by ' + bvCodeshare(s);
     var title = ((s.from && s.from.city) || '') + '  →  ' + ((s.to && s.to.city) || '');
-    return ldCard(no, title, sub, kids);
+    return ldCard(no, title, sub, kids, 'flight');
   }
   function ldHotelCard(no, x) {
     var nights = null;
@@ -700,7 +732,7 @@
     if (x.address) kids.push(h('p', { class: 'ld-addr', text: x.address }));
     if (x.notes) kids.push(h('p', { class: 'ld-prose', text: x.notes }));
     ldConf(kids, x);
-    return ldCard(no, x.name || 'Your stay', [x.room, x.location].filter(Boolean).join('  ·  '), kids);
+    return ldCard(no, x.name || 'Your stay', [x.room, x.location].filter(Boolean).join('  ·  '), kids, 'hotel');
   }
   /* booking confirmation image (QR / ticket) in the PDF — crossorigin so html2canvas can draw it */
   function ldConf(kids, x) {
@@ -717,7 +749,7 @@
     ])];
     if (x.notes) kids.push(h('p', { class: 'ld-prose', text: x.notes }));
     ldConf(kids, x);
-    return ldCard(no, x.type || 'Private transfer', [x.from, x.to].filter(Boolean).join('  →  '), kids);
+    return ldCard(no, x.type || 'Private transfer', [x.from, x.to].filter(Boolean).join('  →  '), kids, 'transport');
   }
   function ldEntCard(no, x) {
     var kids = [ldPills([
@@ -730,7 +762,7 @@
     ])];
     if (x.notes) kids.push(h('p', { class: 'ld-prose', text: x.notes }));
     ldConf(kids, x);
-    return ldCard(no, x.name || 'Experience', x.category || (x.kind === 'dining' ? 'Dining' : 'Experience'), kids);
+    return ldCard(no, x.name || 'Experience', x.category || (x.kind === 'dining' ? 'Dining' : 'Experience'), kids, x.kind === 'dining' ? 'dining' : 'experience');
   }
   function ldCruiseCard(no, x) {
     var kids = [ldPills([
@@ -743,7 +775,7 @@
     ])];
     if (x.notes) kids.push(h('p', { class: 'ld-prose', text: x.notes }));
     ldConf(kids, x);
-    return ldCard(no, x.ship || 'Your cruise', x.line || 'Cruise', kids);
+    return ldCard(no, x.ship || 'Your cruise', x.line || 'Cruise', kids, 'cruise');
   }
   function ldDayCard(x) {
     return h('div', { class: 'ld-note ld-day' }, [
@@ -787,7 +819,7 @@
     }
     return out;
   }
-  var LD_PDF = { format: 'letter', margin: [10, 0, 10, 0], bg: '#F4EDDF', pageBg: [244, 237, 223] };
+  var LD_PDF = { format: 'letter', margin: 0, bg: '#F4EDDF', fill: true };
   function ldMast(eyebrow) {
     return h('header', { class: 'ld-mast' }, [
       h('div', { class: 'ld-brand' }, [h('span', { class: 'ld-mark' }), h('span', { class: 'ld-brand-name', text: agencyName() })]),

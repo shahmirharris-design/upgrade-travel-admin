@@ -1907,13 +1907,13 @@ html.acct-modal-open, body.acct-modal-open{ overflow:hidden; }
 /* itinerary booking confirmation (QR / ticket) — beautiful view + PDF */
 .bv-conf{ margin-top:14px; }
 .bv-conf-k{ font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--gold-soft); font-weight:600; margin-bottom:8px; }
-.bv-conf-img{ display:block; width:auto; max-width:200px; max-height:200px; border-radius:10px; background:#fff; padding:10px; cursor:zoom-in; box-shadow:0 8px 24px -14px rgba(0,0,0,.6); }
+.bv-conf-img{ display:block; width:auto; max-width:280px; max-height:280px; border-radius:10px; background:#fff; padding:12px; cursor:zoom-in; box-shadow:0 8px 24px -14px rgba(0,0,0,.6); image-rendering:pixelated; }
 .bv-conf-hint{ font-size:11px; color:var(--bv-muted,#A8987B); margin-top:6px; }
 .bv-lightbox{ position:fixed; inset:0; z-index:2000; background:rgba(10,7,3,.92); display:flex; align-items:center; justify-content:center; padding:24px; cursor:zoom-out; }
 .bv-lightbox img{ width:min(90vw,620px); height:auto; max-height:90vh; object-fit:contain; border-radius:14px; background:#fff; padding:22px; image-rendering:pixelated; }
 .ld-conf{ margin-top:14px; }
 .ld-conf-k{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:#7A5E29; font-weight:700; margin-bottom:6px; }
-.ld-conf-img{ display:block; width:auto; max-width:180px; max-height:180px; border:1px solid #E7DCC4; border-radius:8px; background:#fff; padding:8px; break-inside:avoid; }
+.ld-conf-img{ display:block; width:auto; max-width:270px; max-height:270px; border:1px solid #E7DCC4; border-radius:8px; background:#fff; padding:12px; break-inside:avoid; image-rendering:pixelated; }
 
 /* Release A: party names, check-in link */
 .bv-party{ margin-top:10px; font-size:13px; letter-spacing:.06em; color:#C7B79A; }
@@ -1966,3 +1966,27 @@ html.acct-modal-open, body.acct-modal-open{ overflow:hidden; }
 /* typographic wrapping: even heading lines, no orphaned last words in prose */
 h1, h2, h3, .ld-h1, .ld-title, .bv-item-title, .ld-banner-city{ text-wrap: balance; }
 p, .ld-prose, .bv-day-text, .quote-note{ text-wrap: pretty; }
+
+
+/* PDF keep-wrappers (added to the export clone only): breaks land between blocks and each
+   block carries its own top air onto a fresh page */
+.ld-keep{ page-break-inside:avoid; break-inside:avoid; border-top:28px solid transparent; }
+.ld-keep > :first-child{ margin-top:0 !important; }
+
+/* per-type icon chip in the card head */
+.ld-card-head-main{ min-width:0; }
+.ld-ic{ margin-left:auto; flex:none; width:42px; height:42px; border:1px solid #E7DCC4; border-radius:999px; display:flex; align-items:center; justify-content:center; color:#A9854C; background:#F4EDDF; }
+.ld-ic svg{ display:block; }
+
+/* the flight strip: reads like a boarding pass */
+.ld-flight{ display:grid; grid-template-columns:1.25fr .9fr 1.25fr; gap:18px; align-items:start; padding:20px 22px 18px; border:1px solid #E7DCC4; border-radius:12px; background:#F4EDDF; margin:0 0 16px; }
+.ld-fl-lab{ font-size:10px; letter-spacing:.22em; text-transform:uppercase; color:#7A5E29; white-space:nowrap; }
+.ld-fl-time{ font-family:'Cormorant Garamond',Georgia,serif; font-size:33px; font-weight:500; line-height:1.05; margin-top:7px; color:#211B12; }
+.ld-fl-code{ font-size:15px; font-weight:600; letter-spacing:.14em; color:#A9854C; margin-top:3px; }
+.ld-fl-ap{ font-size:12px; color:#5A5142; margin-top:4px; line-height:1.5; }
+.ld-fl-mid{ text-align:center; padding-top:16px; }
+.ld-fl-dur{ font-size:11.5px; color:#7A5E29; letter-spacing:.05em; white-space:nowrap; }
+.ld-fl-line{ position:relative; height:1px; background:linear-gradient(90deg, rgba(169,133,76,.18), rgba(169,133,76,.65)); margin:12px 2px 10px; }
+.ld-fl-line svg{ position:absolute; right:-3px; top:-7px; color:#A9854C; }
+.ld-fl-no{ font-size:11.5px; color:#7C7155; }
+.ld-fl-arr{ text-align:right; }
