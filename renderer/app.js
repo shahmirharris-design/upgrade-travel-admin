@@ -1362,9 +1362,33 @@
     var wrap = tabDoc();
     if (state.docView === 'form') {
       var body = wrap.querySelector('.main-body');
-      if (body) { var box = h('div', { id: 'invlist-box' }); body.insertBefore(box, body.firstChild); setTimeout(loadInvoiceList, 0); }
+      if (body) body.insertBefore(docListBar('invoice'), body.firstChild);
     }
     return wrap;
+  }
+  function docListBar(kind) {
+    var main = [h('span', { class: 'sent-bar-label', text: kind === 'invoice' ? 'Invoices' : 'Your quotes' }), h('span', { class: 'sent-bar-count', id: 'doc-bar-count', text: '' })];
+    if (kind === 'invoice') main.push(h('span', { class: 'sent-bar-note', id: 'doc-bar-note', text: '' }));
+    var bar = h('div', { class: 'sent-bar' }, [
+      h('div', { class: 'sent-bar-main' }, main),
+      h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto', onclick: function () { state.docView = 'list'; renderTab(); }, text: 'View all' })
+    ]);
+    setTimeout(function () { loadDocBarCounts(kind); }, 0);
+    return bar;
+  }
+  async function loadDocBarCounts(kind) {
+    var cEl = document.getElementById('doc-bar-count'); if (!cEl) return;
+    if (kind === 'invoice') {
+      var res = await Promise.all([sb.from('invoices').select('id', { count: 'exact', head: true }), sb.from('invoices').select('total_charged, amount_paid, currency')]);
+      cEl = document.getElementById('doc-bar-count'); if (!cEl) return;
+      cEl.textContent = (res[0].count != null ? res[0].count : 0);
+      var rows = res[1].data || [], out = 0, cur = 'USD'; rows.forEach(function (i) { out += Math.max(dnum(i.total_charged) - dnum(i.amount_paid), 0); if (i.currency) cur = i.currency; });
+      var nEl = document.getElementById('doc-bar-note'); if (nEl) nEl.textContent = out > 0 ? money(out, cur) + ' outstanding' : 'All settled';
+    } else {
+      var r = await sb.from('quotes').select('id', { count: 'exact', head: true });
+      cEl = document.getElementById('doc-bar-count'); if (!cEl) return;
+      cEl.textContent = (r.count != null ? r.count : 0);
+    }
   }
   function findCustomerNameByEmail(email) {
     if (!email) return ''; var e = email.toLowerCase();
@@ -1374,14 +1398,14 @@
   async function loadInvoiceList() {
     var box = document.getElementById('invlist-box'); if (!box) return;
     var res = await Promise.all([
-      sb.from('invoices').select('*').order('created_at', { ascending: false }).limit(25),
+      sb.from('invoices').select('*').order('created_at', { ascending: false }).limit(200),
       sb.from('invoice_finance').select('invoice_id, net_cost')
     ]);
     box = document.getElementById('invlist-box'); if (!box) return;
     var invs = res[0].data || [], fin = res[1].data || [], costMap = {};
     fin.forEach(function (f) { costMap[f.invoice_id] = f.net_cost; });
     box.textContent = '';
-    if (!invs.length) return;
+    if (!invs.length) { box.appendChild(h('div', { class: 'pkg-empty', text: 'No invoices sent yet.' })); return; }
     var outstanding = 0; invs.forEach(function (i) { outstanding += Math.max(dnum(i.total_charged) - dnum(i.amount_paid), 0); });
     box.appendChild(h('div', { class: 'sq-wrap' }, [
       h('div', { class: 'invlist-head' }, [h('h3', { class: 'sq-h', text: 'Invoices · ' + invs.length }), h('span', { class: 'invlist-out' + (outstanding > 0 ? ' is-due' : ''), text: outstanding > 0 ? money(outstanding, invs[0].currency || 'USD') + ' outstanding' : 'All settled ✓' })])
@@ -1464,7 +1488,7 @@
     if (state.docView === 'form') {
       var body = wrap.querySelector('.main-body');
       if (body) {
-        var sq = h('div', { id: 'sentq-box' }); body.insertBefore(sq, body.firstChild); setTimeout(loadSentQuotes, 0);
+        body.insertBefore(docListBar('quote'), body.firstChild);
         var box = h('div', { id: 'qreq-box' }); body.insertBefore(box, body.firstChild); setTimeout(loadRequests, 0);
       }
     }
@@ -1541,7 +1565,7 @@
   }
   async function loadSentQuotes() {
     var box = document.getElementById('sentq-box'); if (!box) return;
-    var r = await sb.from('quotes').select('*').order('created_at', { ascending: false }).limit(60);
+    var r = await sb.from('quotes').select('*').order('created_at', { ascending: false }).limit(200);
     box = document.getElementById('sentq-box'); if (!box) return;
     state.allQuotes = r.data || [];
     renderSentQuotes();
@@ -1549,7 +1573,7 @@
   function renderSentQuotes() {
     var box = document.getElementById('sentq-box'); if (!box) return;
     var qs = state.allQuotes || []; box.textContent = '';
-    if (!qs.length) return;
+    if (!qs.length) { box.appendChild(h('div', { class: 'pkg-empty', text: 'No quotes sent yet.' })); return; }
     var filt = state.quoteFilter || 'all';
     var counts = { all: qs.length, sent: 0, accepted: 0, declined: 0 };
     qs.forEach(function (q) { var s = q.status || 'sent'; if (counts[s] != null) counts[s]++; });
@@ -1910,6 +1934,14 @@
   function tabDoc() {
     var c = dcfg(), wrap = h('div');
     if (state.docView === 'review' && state.docDraft) { wrap.appendChild(mainHead(c.reviewTitle, 'Check everything, then send it to the customer.')); wrap.appendChild(h('div', { class: 'main-body' }, [reviewDoc(state.docDraft)])); return wrap; }
+    if (state.docView === 'list') {
+      var isInv = c.head === 'INVOICE';
+      wrap.appendChild(mainHead(isInv ? 'Invoices' : 'Quotes', isInv ? 'View or edit any invoice you’ve sent.' : 'View or edit any quote you’ve sent.'));
+      var lb = h('div', { class: 'main-body' });
+      lb.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-bottom:18px', onclick: function () { state.docView = 'form'; renderTab(); }, text: isInv ? '← New invoice' : '← New quote' }));
+      lb.appendChild(h('div', { id: isInv ? 'invlist-box' : 'sentq-box' }, [h('div', { class: 'dash-loading', text: isInv ? 'Loading invoices…' : 'Loading quotes…' })]));
+      wrap.appendChild(lb); setTimeout(isInv ? loadInvoiceList : loadSentQuotes, 0); return wrap;
+    }
     restoreDraftForCustomer();
     wrap.appendChild(mainHead(c.title, c.sub));
     var body = h('div', { class: 'main-body' });

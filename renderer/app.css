@@ -687,3 +687,5 @@ input{ font-family:inherit; }
 .set-update-status.su-err{ color:#a3402f; }
 .set-dl-link{ background:none; border:none; padding:0; margin-top:10px; color:var(--gold); font-size:12.5px; font-weight:600; cursor:pointer; text-decoration:underline; }
 .set-dl-link:hover{ color:var(--gold-soft); }
+
+.sent-bar-note{ font-size:12.5px; color:var(--stone); margin-left:4px; }
