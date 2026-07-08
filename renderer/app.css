@@ -867,3 +867,39 @@ input{ font-family:inherit; }
 .cd-book-del:hover{ color:#a3402f; }
 .cd-book-form{ margin-top:12px; padding-top:12px; border-top:1px dashed var(--line); }
 .trip-st-itinerary .trip-stage-dot{ background:var(--gold); }
+
+/* mission-control dashboard */
+.dash-left{ grid-column:span 2; display:flex; flex-direction:column; gap:14px; min-width:0; }
+.dash-chart{ display:flex; align-items:flex-end; gap:14px; height:170px; padding:8px 4px 0; }
+.dash-bar{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:5px; min-width:0; }
+.dash-bar-v{ font-size:10.5px; font-weight:600; color:var(--stone); font-variant-numeric:tabular-nums; height:14px; }
+.dash-bar-col{ width:100%; max-width:52px; display:flex; align-items:flex-end; }
+.dash-bar-billed{ position:relative; width:100%; background:rgba(169,133,76,.18); border-radius:6px 6px 3px 3px; overflow:hidden; }
+.dash-bar-paid{ position:absolute; left:0; right:0; bottom:0; background:var(--gold); }
+.dash-bar-l{ font-size:11px; color:var(--stone); }
+.dash-chart-key{ display:flex; gap:14px; margin-top:10px; }
+.dash-key{ font-size:11.5px; color:var(--stone); display:inline-flex; align-items:center; gap:6px; }
+.dash-key::before{ content:""; width:9px; height:9px; border-radius:3px; }
+.dash-key--paid::before{ background:var(--gold); }
+.dash-key--billed::before{ background:rgba(169,133,76,.22); }
+.dash-empty{ font-size:13px; color:var(--stone); margin:8px 0 2px; }
+.dash-att-list{ display:flex; flex-direction:column; }
+.dash-att{ display:flex; align-items:center; gap:10px; width:100%; text-align:left; border:0; background:none; padding:10px 4px; border-bottom:1px solid var(--line); cursor:pointer; border-radius:6px; }
+.dash-att:last-child{ border-bottom:0; }
+.dash-att:hover{ background:rgba(169,133,76,.07); }
+.dash-att-dot{ flex:none; width:9px; height:9px; border-radius:50%; }
+.dash-att-dot--req{ background:#B8860B; }
+.dash-att-dot--exp{ background:#B8860B; }
+.dash-att-dot--due{ background:#A3402F; }
+.dash-att-dot--dep{ background:var(--gold); }
+.dash-att-dot--ret{ background:#7C7155; }
+.dash-att-t{ font-size:13px; color:var(--ink); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.dash-att-a{ margin-left:auto; flex:none; font-size:11.5px; font-weight:600; color:#7A5E29; }
+.dash-day{ padding:8px 0 2px; border-bottom:1px solid var(--line); }
+.dash-day:last-child{ border-bottom:0; }
+.dash-day-l{ font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:#7A5E29; font-weight:600; margin-bottom:4px; }
+.dash-day-item{ display:flex; align-items:center; gap:8px; width:100%; text-align:left; border:0; background:none; padding:5px 2px; font-size:12.5px; color:var(--ink); cursor:pointer; border-radius:6px; }
+.dash-day-item:hover{ background:rgba(169,133,76,.07); }
+.dash-panel-h{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+.dash-panel-link{ border:0; background:none; font-size:12px; font-weight:600; color:#7A5E29; cursor:pointer; padding:0; }
+.dash-panel-link:hover{ text-decoration:underline; }
