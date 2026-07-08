@@ -967,6 +967,8 @@
       ['Travelers', paxText(inv)],
       ['Ref', inv.booking_reference || '']
     ]));
+    var ivDest = ((inv.segments && inv.segments[0] && inv.segments[0].to && inv.segments[0].to.city) || (inv.destination || '').split(',')[0] || '').trim();
+    if (ivDest) doc.appendChild(h('section', { class: 'ld-banner ld-banner--doc' }, [h('div', { class: 'ld-banner-img bv-ph', 'data-city': ivDest }), h('div', { class: 'ld-banner-cap' }, [h('div', { class: 'ld-banner-eyebrow', text: 'Your journey to' }), h('h2', { class: 'ld-banner-city', text: ivDest })])]));
     if (inv.segments && inv.segments.length) { doc.appendChild(h('div', { class: 'ld-group-label', text: 'The Routing' })); doc.appendChild(ldRouting(inv)); }
     doc.appendChild(h('div', { class: 'ld-group-label', text: 'The Charges' }));
     var totals = [['Total', money(total, cur), paid <= 0]];
@@ -992,6 +994,8 @@
       ['Valid until', q.valid_until ? fmtDate(q.valid_until) : ''],
       ['Travelers', paxText(q)]
     ]));
+    var qDest = ((q.segments && q.segments[0] && q.segments[0].to && q.segments[0].to.city) || (q.destination || '').split(',')[0] || '').trim();
+    if (qDest) doc.appendChild(h('section', { class: 'ld-banner ld-banner--doc' }, [h('div', { class: 'ld-banner-img bv-ph', 'data-city': qDest }), h('div', { class: 'ld-banner-cap' }, [h('div', { class: 'ld-banner-eyebrow', text: 'Your journey to' }), h('h2', { class: 'ld-banner-city', text: qDest })])]));
     if (q.segments && q.segments.length) { doc.appendChild(h('div', { class: 'ld-group-label', text: 'The Routing' })); doc.appendChild(ldRouting(q)); }
     doc.appendChild(h('div', { class: 'ld-group-label', text: 'The Pricing' }));
     doc.appendChild(ldCharges(q.line_items || [], cur, [['Quote total', money(total, cur), true]]));
@@ -1678,10 +1682,14 @@
   function bvFlight(s, idx, role, skipPerks) {
     var card = h('div', { class: 'bv-flight' });
     var opby = bvCodeshare(s);
-    card.appendChild(h('div', { class: 'bv-flight-head' }, [role ? h('span', { class: 'bv-flight-role', text: role }) : null, h('div', { class: 'bv-al serif', text: s.airline || 'Your flight' }), s.cabin ? h('span', { class: 'bv-cab', text: s.cabin }) : null]));
-    if (opby) card.appendChild(h('div', { class: 'bv-opby', text: 'Operated by ' + opby }));
     var ciUrl = bvCheckinURL(s.airline);
-    if (ciUrl) card.appendChild(h('a', { class: 'bv-checkin', href: ciUrl, target: '_blank', rel: 'noopener', text: 'Online check-in with ' + s.airline }));
+    card.appendChild(h('div', { class: 'bv-flight-head' }, [
+      role ? h('span', { class: 'bv-flight-role', text: role }) : null,
+      h('div', { class: 'bv-al serif', text: s.airline || 'Your flight' }),
+      s.cabin ? h('span', { class: 'bv-cab', text: s.cabin }) : null,
+      ciUrl ? h('a', { class: 'bv-checkin', href: ciUrl, target: '_blank', rel: 'noopener', title: 'Opens the airline\u2019s official check-in page', text: 'Online check-in' }) : null
+    ]));
+    if (opby) card.appendChild(h('div', { class: 'bv-opby', text: 'Operated by ' + opby }));
     var body = h('div', { class: 'bv-flight-body' });
     var dt = s.depart_time ? fmtTime(s.depart_time) : '', at = s.arrive_time ? fmtTime(s.arrive_time) : '', ad = s.arrive_date || s.return_date || bvArriveDate(s);
     body.appendChild(h('div', { class: 'bv-timeline' }, [

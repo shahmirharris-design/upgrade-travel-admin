@@ -789,3 +789,4 @@ input{ font-family:inherit; }
 .trav-head{ margin-bottom:6px; }
 .trav-head span{ font-size:11px; letter-spacing:.04em; color:var(--stone); }
 .trav-rows{ display:flex; flex-direction:column; gap:8px; margin-bottom:8px; }
+.bag-btns{ display:flex; flex-wrap:wrap; gap:14px; align-items:center; }

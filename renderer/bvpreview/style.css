@@ -1710,7 +1710,7 @@ html.acct-modal-open, body.acct-modal-open{ overflow:hidden; }
 .bv-flight-role{ font-size:11px; letter-spacing:.22em; text-transform:uppercase; color:#C9A24B; margin-bottom:8px; }
 
 /* ================= customer itinerary PDF — editorial paper document ================= */
-.ldoc{ width:850px; max-width:100%; margin:0 auto; background:#F4EDDF; color:#211B12; font-family:'Inter',system-ui,sans-serif; font-weight:400; line-height:1.65; font-size:15px; padding:56px 48px 64px; }
+.ldoc{ width:850px; max-width:100%; margin:0 auto; background:#F4EDDF; color:#211B12; font-family:'Inter',system-ui,sans-serif; font-weight:400; line-height:1.68; font-size:15px; padding:60px 56px 72px; }
 .acct-modal .ldoc{ border-radius:12px; }
 .ld-mast{ display:flex; align-items:flex-end; justify-content:space-between; gap:24px; padding-bottom:18px; border-bottom:1px solid #D8C8A9; }
 .ld-brand{ display:flex; align-items:center; gap:11px; }
@@ -1719,30 +1719,31 @@ html.acct-modal-open, body.acct-modal-open{ overflow:hidden; }
 .ld-mast-r{ text-align:right; }
 .ld-eyebrow{ font-size:11px; letter-spacing:.3em; text-transform:uppercase; color:#7A5E29; }
 .ld-mast-sub{ font-size:12px; color:#7C7155; margin-top:4px; }
-.ld-cover{ padding:44px 0 10px; }
+.ld-cover{ padding:48px 0 12px; }
 .ld-kicker{ font-size:12px; letter-spacing:.34em; text-transform:uppercase; color:#7A5E29; }
 .ld-h1{ font-family:'Cormorant Garamond',Georgia,serif; font-weight:500; font-size:64px; line-height:1.02; margin:14px 0 0; letter-spacing:-.01em; }
 .ld-rule{ width:64px; height:2px; background:#A9854C; margin:24px 0 0; }
-.ld-prepared{ font-family:'Cormorant Garamond',Georgia,serif; font-style:italic; font-size:19px; color:#5A5142; margin:18px 0 0; }
+.ld-prepared{ font-family:'Cormorant Garamond',Georgia,serif; font-style:italic; font-size:20px; color:#5A5142; margin:20px 0 0; }
 .ld-banner{ position:relative; margin-top:40px; border-radius:14px; overflow:hidden; height:300px; break-inside:avoid; background:linear-gradient(120deg,#241C12 0%, #2E2418 45%, #3A2E1D 100%); }
 .ld-banner-img{ position:absolute; inset:0; background-size:cover; background-position:center; }
+.ld-banner-img.bv-has-img{ filter:saturate(1.24) contrast(1.07) brightness(1.03); }
 .ld-banner::after{ content:""; position:absolute; inset:0; background:linear-gradient(to top, rgba(20,13,7,.66), rgba(20,13,7,.12) 52%, rgba(20,13,7,.02)); }
 .ld-banner-cap{ position:absolute; left:34px; bottom:26px; z-index:2; color:#fff; }
 .ld-banner-eyebrow{ font-size:11px; letter-spacing:.32em; text-transform:uppercase; color:#C2A266; }
 .ld-banner-city{ font-family:'Cormorant Garamond',Georgia,serif; font-weight:500; font-size:46px; line-height:1; margin:8px 0 0; color:#fff; text-shadow:0 2px 24px rgba(0,0,0,.5); }
-.ld-card{ background:#FBF6EC; border:1px solid #E7DCC4; border-radius:14px; padding:32px 36px; margin-top:26px; break-inside:avoid; box-shadow:0 1px 0 rgba(33,27,18,.02); }
+.ld-card{ background:#FBF6EC; border:1px solid #E7DCC4; border-radius:14px; padding:34px 38px; margin-top:28px; break-inside:avoid; box-shadow:0 1px 0 rgba(33,27,18,.02); }
 .ld-card-head{ display:flex; gap:18px; align-items:flex-start; }
 .ld-no{ font-family:'Cormorant Garamond',Georgia,serif; font-size:32px; font-weight:500; color:#C2A266; line-height:.9; min-width:48px; }
-.ld-title{ font-family:'Cormorant Garamond',Georgia,serif; font-weight:600; font-size:27px; line-height:1.14; margin:2px 0 0; }
+.ld-title{ font-family:'Cormorant Garamond',Georgia,serif; font-weight:600; font-size:28px; line-height:1.14; margin:2px 0 0; }
 .ld-subtitle{ font-family:'Cormorant Garamond',Georgia,serif; font-style:italic; font-size:17px; color:#7A5E29; margin-top:7px; }
 .ld-sumlabel{ font-size:11px; letter-spacing:.24em; text-transform:uppercase; color:#7A5E29; margin:22px 0 12px; }
-.ld-meta{ display:flex; flex-wrap:wrap; gap:8px; }
-.ld-pill{ font-size:12.5px; letter-spacing:.02em; padding:6px 13px; border-radius:999px; background:#F4EDDF; border:1px solid #D8C8A9; color:#5A5142; }
+.ld-meta{ display:flex; flex-wrap:wrap; gap:9px; }
+.ld-pill{ font-size:13px; letter-spacing:.02em; padding:7px 14px; border-radius:999px; background:#F4EDDF; border:1px solid #D8C8A9; color:#5A5142; }
 .ld-pill b{ color:#211B12; font-weight:600; }
 .ld-layover{ font-size:13px; color:#7A5E29; background:rgba(169,133,76,.1); border:1px dashed rgba(169,133,76,.4); border-radius:10px; padding:9px 14px; margin:0 0 16px; }
 .ld-prose{ margin:16px 0 0; color:#5A5142; font-size:14.5px; line-height:1.6; }
 .ld-addr{ margin:14px 0 0; font-size:13px; color:#7C7155; }
-.ld-group-label{ font-family:'Cormorant Garamond',Georgia,serif; font-size:26px; font-weight:600; margin:44px 0 0; padding-bottom:10px; border-bottom:1px solid #D8C8A9; }
+.ld-group-label{ font-family:'Cormorant Garamond',Georgia,serif; font-size:27px; font-weight:600; margin:52px 0 0; padding-bottom:11px; border-bottom:1px solid #D8C8A9; }
 .ld-note{ margin-top:30px; background:#FBF6EC; border:1px solid #E7DCC4; border-radius:12px; padding:22px 26px; break-inside:avoid; }
 .ld-note p{ margin:0; color:#5A5142; font-size:14.5px; }
 .ld-footer{ margin-top:52px; padding-top:20px; border-top:1px solid #D8C8A9; display:flex; align-items:center; justify-content:space-between; gap:16px; }
@@ -1916,8 +1917,9 @@ html.acct-modal-open, body.acct-modal-open{ overflow:hidden; }
 
 /* Release A: party names, check-in link */
 .bv-party{ margin-top:10px; font-size:13px; letter-spacing:.06em; color:#C7B79A; }
-.bv-checkin{ display:inline-block; margin:6px 0 2px; font-size:12.5px; font-weight:600; color:#C9A24B; text-decoration:underline; text-underline-offset:3px; }
-.bv-checkin:hover{ color:#E8CE8F; }
+.bv-checkin{ margin-left:auto; flex:none; display:inline-flex; align-items:center; padding:7px 14px; border:1px solid rgba(201,162,75,.5); border-radius:999px; font-size:12px; font-weight:600; letter-spacing:.04em; color:#E8CE8F; text-decoration:none; white-space:nowrap; }
+.bv-checkin:hover{ background:rgba(201,162,75,.16); border-color:#C9A24B; }
+@media (max-width: 640px){ .bv-checkin{ margin-left:0; margin-top:8px; } }
 .ld-party{ margin:-16px 0 26px; font-size:13.5px; font-style:italic; color:#5A5142; }
 
 /* Release B: day-by-day notes, documents, cruise */
@@ -1948,3 +1950,8 @@ html.acct-modal-open, body.acct-modal-open{ overflow:hidden; }
 .q-opt-chosen{ font-size:13px; font-weight:600; color:#2F6B33; flex:none; }
 .ld-opt-price{ margin:4px 0 0; font-weight:600; color:#211B12; }
 @media (max-width: 640px){ .q-opt{ flex-direction:column; align-items:flex-start; } }
+
+
+/* destination banner inside quote/invoice paper docs */
+.ld-banner--doc .ld-banner-img{ min-height:200px; }
+.bv-checkin{ align-self:center; }

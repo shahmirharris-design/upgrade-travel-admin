@@ -1170,21 +1170,29 @@
   var BAG_TYPES = ['Carry-on', 'Personal item', 'Checked bag', 'Extra checked bag', 'Sports equipment', 'Oversized item'];
   var BAG_UNITS = ['kg', 'lb'];
   function bagList(v) { return Array.isArray(v) ? v.filter(function (b) { return b && (b.type || b.weight != null); }) : []; }
+  function bagRowEl(item) {
+    item = item || {};
+    var rm = h('button', { type: 'button', class: 'bag-rm', title: 'Remove', text: '×' });
+    var row = h('div', { class: 'bag-row' }, [
+      h('div', { class: 'bag-c bag-type' }, [styledSelect(null, item.type || 'Checked bag', BAG_TYPES, null)]),
+      h('div', { class: 'bag-c bag-qty' }, [h('input', { class: 'inv-input', type: 'number', min: '1', step: '1', value: item.qty != null ? item.qty : 1 })]),
+      h('div', { class: 'bag-c bag-wt' }, [h('input', { class: 'inv-input', type: 'number', min: '0', step: '1', placeholder: 'Weight', value: item.weight != null ? item.weight : '' })]),
+      h('div', { class: 'bag-c bag-unit' }, [styledSelect(null, item.unit || 'kg', BAG_UNITS, null)]),
+      rm
+    ]);
+    rm.addEventListener('click', function () { row.remove(); });
+    return row;
+  }
+  /* the typical allowance for a cabin, one tap instead of four fields */
+  function standardBags(cabin) {
+    var c = (cabin || '').toLowerCase();
+    if (c.indexOf('first') > -1 || c.indexOf('business') > -1) return [{ type: 'Checked bag', qty: 2, weight: 32, unit: 'kg' }, { type: 'Carry-on', qty: 1, weight: 8, unit: 'kg' }];
+    if (c.indexOf('premium') > -1) return [{ type: 'Checked bag', qty: 2, weight: 23, unit: 'kg' }, { type: 'Carry-on', qty: 1, weight: 8, unit: 'kg' }];
+    return [{ type: 'Checked bag', qty: 1, weight: 23, unit: 'kg' }, { type: 'Carry-on', qty: 1, weight: 8, unit: 'kg' }];
+  }
   function baggageBuilder(value) {
     var rows = h('div', { class: 'bag-rows' });
-    function addRow(item) {
-      item = item || {};
-      var rm = h('button', { type: 'button', class: 'bag-rm', title: 'Remove', text: '×' });
-      var row = h('div', { class: 'bag-row' }, [
-        h('div', { class: 'bag-c bag-type' }, [styledSelect(null, item.type || 'Checked bag', BAG_TYPES, null)]),
-        h('div', { class: 'bag-c bag-qty' }, [h('input', { class: 'inv-input', type: 'number', min: '1', step: '1', value: item.qty != null ? item.qty : 1 })]),
-        h('div', { class: 'bag-c bag-wt' }, [h('input', { class: 'inv-input', type: 'number', min: '0', step: '1', placeholder: 'Weight', value: item.weight != null ? item.weight : '' })]),
-        h('div', { class: 'bag-c bag-unit' }, [styledSelect(null, item.unit || 'kg', BAG_UNITS, null)]),
-        rm
-      ]);
-      rm.addEventListener('click', function () { row.remove(); });
-      rows.appendChild(row);
-    }
+    function addRow(item) { rows.appendChild(bagRowEl(item)); }
     bagList(value).forEach(addRow);
     var legacy = (typeof value === 'string' && value.trim()) ? value.trim() : '';
     return h('div', { class: 'inv-field bag-wrap' }, [
@@ -1193,7 +1201,25 @@
       legacy ? h('input', { type: 'hidden', class: 'bag-legacy-keep', value: legacy }) : null,
       h('div', { class: 'bag-head' }, [h('span', { text: 'Type' }), h('span', { text: 'Qty' }), h('span', { text: 'Weight' }), h('span', { text: 'Unit' }), h('span')]),
       rows,
-      h('button', { type: 'button', class: 'inv-addline bag-add', onclick: function () { addRow(); }, text: '+ Add baggage' })
+      h('div', { class: 'bag-btns' }, [
+        h('button', { type: 'button', class: 'inv-addline bag-add', onclick: function () { addRow(); }, text: '+ Add baggage' }),
+        h('button', { type: 'button', class: 'inv-addline', title: 'Fill the usual allowance for this leg\u2019s cabin', onclick: function (e) {
+          var card = e.target.closest('.seg-card'); var cabin = card ? ((card.querySelector('.ss input[type=hidden]') || {}).value || '') : '';
+          rows.textContent = '';
+          standardBags(cabin).forEach(addRow);
+        }, text: 'Standard for this cabin' }),
+        h('button', { type: 'button', class: 'inv-addline', title: 'Copy this leg\u2019s baggage to every flight in this list', onclick: function (e) {
+          var card = e.target.closest('.seg-card'); if (!card) return;
+          var bags = readBaggage(card), list = card.closest('.inv-segs'); if (!bags.length || !list) return;
+          Array.prototype.forEach.call(list.querySelectorAll('.seg-card'), function (other) {
+            if (other === card) return;
+            var r2 = other.querySelector('.bag-wrap .bag-rows'); if (!r2) return;
+            r2.textContent = '';
+            bags.forEach(function (b) { r2.appendChild(bagRowEl(b)); });
+          });
+          e.target.textContent = 'Copied to all \u2713'; setTimeout(function () { e.target.textContent = 'Copy to all flights'; }, 1600);
+        }, text: 'Copy to all flights' })
+      ])
     ]);
   }
   function readBaggage(card) {
@@ -1254,8 +1280,16 @@
           ])
         ]),
         h('div', { class: 'inv-row2', style: 'margin-top:12px' }, [
-          richField('Confirmation / PNR', 'seg-conf', seg && seg.confirmation, 'Booking reference'),
-          richField('Operated by — ONLY if a different airline flies it', 'seg-opby', seg && seg.operated_by, 'Leave blank unless codeshare')
+          h('label', { class: 'inv-field' }, [h('span', { text: 'Confirmation / PNR' }), h('div', { class: 'itin-pull-row' }, [
+            h('input', { class: 'inv-input seg-conf', type: 'text', autocomplete: 'off', placeholder: 'Booking reference', value: (seg && seg.confirmation) || '' }),
+            h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:0 12px; height:46px; white-space:nowrap', title: 'Same booking reference on every flight in this list', onclick: function (e) {
+              var card = e.target.closest('.seg-card'); var v = card ? ((card.querySelector('.seg-conf') || {}).value || '').trim() : '';
+              var list = card && card.closest('.inv-segs'); if (!v || !list) return;
+              Array.prototype.forEach.call(list.querySelectorAll('.seg-card .seg-conf'), function (inp) { inp.value = v; });
+              e.target.textContent = '\u2713'; setTimeout(function () { e.target.textContent = '\u2192 all'; }, 1600);
+            }, text: '\u2192 all' })
+          ])]),
+          richField('Operated by \u2014 ONLY if a different airline flies it', 'seg-opby', seg && seg.operated_by, 'Leave blank unless codeshare')
         ]),
         h('div', { class: 'inv-row2', style: 'margin-top:12px' }, [
           h('label', { class: 'inv-field' }, [h('span', { text: 'Arrival date — only if it lands a different day' }), h('input', { class: 'inv-input seg-arrdate', type: 'date', value: (seg && seg.arrive_date) || '' })]),
@@ -2607,7 +2641,7 @@
     return h('div', { class: 'itin-card', 'data-itin': 'hotel' }, [itinRm(), cardImgKeep(x),
       h('div', { class: 'inv-row2' }, [poiField('Hotel', 'h-name', x && x.name, 'e.g. Burj Al Arab', function (p, inp) { fillFromPoi(p, inp, 'h-location', 'h-address'); }, 'h-location'), cityField('City', 'h-location', x && x.location, 'Start typing a city…')]),
       addrField('Address', 'h-address', x && x.address, 'Auto-fills, or click to pick a location', 'h-name', 'h-location'),
-      h('div', { class: 'inv-row2' }, [cdt('Check-in', 'h-cin-date', 'h-cin-time', x && x.checkin_date, x && x.checkin_time), cdt('Check-out', 'h-cout-date', 'h-cout-time', x && x.checkout_date, x && x.checkout_time)]),
+      h('div', { class: 'inv-row2' }, [cdt('Check-in', 'h-cin-date', 'h-cin-time', x && x.checkin_date, x ? x.checkin_time : '15:00'), cdt('Check-out', 'h-cout-date', 'h-cout-time', x && x.checkout_date, x ? x.checkout_time : '11:00')]),
       h('div', { class: 'inv-row2' }, [clabel('Room / suite', 'h-room', x && x.room, 'e.g. Royal Suite'), clabel('Confirmation no.', 'h-conf', x && x.confirmation, 'Optional')]),
       h('div', { class: 'inv-row3' }, [
         h('label', { class: 'inv-field' }, [h('span', { text: 'Meals included' }), h('div', { class: 'h-board-wrap' }, [styledSelect(null, (x && x.board) || 'Not specified', BOARD_TYPES, null)])]),
@@ -2653,8 +2687,8 @@
     return h('div', { class: 'itin-card', 'data-itin': 'cruise' }, [itinRm(), cardImgKeep(x),
       h('div', { class: 'inv-row2' }, [clabel('Cruise line', 'c-line', x && x.line, 'e.g. Explora Journeys'), clabel('Ship', 'c-ship', x && x.ship, 'e.g. Explora I')]),
       h('div', { class: 'inv-row2' }, [clabel('Suite / cabin category', 'c-cabin', x && x.cabin, 'e.g. Ocean Terrace Suite'), clabel('Deck and cabin no.', 'c-deck', x && x.deck, 'e.g. Deck 8, 8014')]),
-      h('div', { class: 'inv-row2' }, [clabel('Embarkation port', 'c-eport', x && x.embark_port, 'e.g. Civitavecchia (Rome)'), cdt('Embarks', 'c-edate', 'c-etime', x && x.embark_date, x && x.embark_time)]),
-      h('div', { class: 'inv-row2' }, [clabel('Disembarkation port', 'c-dport', x && x.disembark_port, 'e.g. Piraeus (Athens)'), cdt('Disembarks', 'c-ddate', 'c-dtime', x && x.disembark_date, x && x.disembark_time)]),
+      h('div', { class: 'inv-row2' }, [h('label', { class: 'inv-field' }, [h('span', { text: 'Embarkation port' }), cityInput('c-eport', x && x.embark_port, 'e.g. Civitavecchia (Rome)')]), cdt('Embarks', 'c-edate', 'c-etime', x && x.embark_date, x && x.embark_time)]),
+      h('div', { class: 'inv-row2' }, [h('label', { class: 'inv-field' }, [h('span', { text: 'Disembarkation port' }), cityInput('c-dport', x && x.disembark_port, 'e.g. Piraeus (Athens)')]), cdt('Disembarks', 'c-ddate', 'c-dtime', x && x.disembark_date, x && x.disembark_time)]),
       h('div', { class: 'inv-row2' }, [clabel('Booking no.', 'c-conf', x && x.confirmation, 'Optional'), clabel('Cruise line phone', 'c-phone', x && x.phone, 'Optional')]),
       clabel('Notes', 'c-notes', x && x.notes, 'Ports of call, dress codes, included excursions'),
       confField(x)
