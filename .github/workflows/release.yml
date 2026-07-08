@@ -1,5 +1,11 @@
-# Builds the admin app for Windows (auto-updating) and Mac on every version tag,
-# and publishes the installers to GitHub Releases. Free on GitHub's runners.
+# Builds the admin app for Windows (auto-updating) and Mac on every version tag.
+#
+# Release safety: the GitHub release is created as a DRAFT first, both platforms
+# upload their installers + update manifests into that same draft, and only once
+# BOTH succeed does the final job flip it to published. This guarantees the app's
+# updater never sees a release that is missing latest.yml or one platform's
+# installer (the race that stranded old Windows builds). If either platform fails,
+# the release stays an invisible draft until the failed job is re-run.
 name: Release
 on:
   push:
@@ -8,7 +14,19 @@ on:
 permissions:
   contents: write
 jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create the draft release (idempotent)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+                 --draft --title "$GITHUB_REF_NAME" --notes "Automated build."
+
   build:
+    needs: prepare
     strategy:
       fail-fast: false
       matrix:
@@ -21,7 +39,16 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install
-      - name: Build and publish
+      - name: Build and upload into the draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder --publish always
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the release (both platforms are up)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
