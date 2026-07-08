@@ -2335,7 +2335,8 @@
       addrField('Address', 'h-address', x && x.address, 'Auto-fills, or click to pick a location', 'h-name', 'h-location'),
       h('div', { class: 'inv-row2' }, [cdt('Check-in', 'h-cin-date', 'h-cin-time', x && x.checkin_date, x && x.checkin_time), cdt('Check-out', 'h-cout-date', 'h-cout-time', x && x.checkout_date, x && x.checkout_time)]),
       h('div', { class: 'inv-row2' }, [clabel('Room / suite', 'h-room', x && x.room, 'e.g. Royal Suite'), clabel('Confirmation no.', 'h-conf', x && x.confirmation, 'Optional')]),
-      clabel('Notes', 'h-notes', x && x.notes, 'Optional')
+      clabel('Notes', 'h-notes', x && x.notes, 'Optional'),
+      confField(x)
     ]);
   }
   function transportCard(x) {
@@ -2344,7 +2345,8 @@
       h('div', { class: 'inv-row2' }, [poiField('From / pickup', 't-from', x && x.from, 'e.g. DXB Airport', null), poiField('To / dropoff', 't-to', x && x.to, 'e.g. Burj Al Arab', null)]),
       h('p', { class: 'itin-opthint', text: 'Driver details — optional. Anything left blank is hidden from the customer.' }),
       h('div', { class: 'inv-row3' }, [clabel('Driver name', 't-driver', x && x.driver, 'Optional'), clabel('Car', 't-car', x && x.car, 'e.g. Mercedes S-Class'), clabel('License plate', 't-plate', x && x.plate, 'Optional')]),
-      clabel('Notes', 't-notes', x && x.notes, 'Optional')
+      clabel('Notes', 't-notes', x && x.notes, 'Optional'),
+      confField(x)
     ]);
   }
   function diningCard(x) {
@@ -2369,9 +2371,10 @@
     var arr = [];
     Array.prototype.forEach.call(document.querySelectorAll('#' + containerId + ' .itin-card'), function (c) {
       var img = ((c.querySelector('.card-img-url') || {}).value || '').trim() || null;
-      if (type === 'hotel') { var n = vcard(c, '.h-name'); if (!n) return; arr.push({ name: n, location: vcard(c, '.h-location'), address: vcard(c, '.h-address'), checkin_date: vcard(c, '.h-cin-date') || null, checkin_time: vcard(c, '.h-cin-time') || null, checkout_date: vcard(c, '.h-cout-date') || null, checkout_time: vcard(c, '.h-cout-time') || null, room: vcard(c, '.h-room'), confirmation: vcard(c, '.h-conf'), notes: vcard(c, '.h-notes'), image_url: img }); }
-      else if (type === 'transport') { var hasAny = vcard(c, '.t-from') || vcard(c, '.t-to') || vcard(c, '.t-date'); if (!hasAny) return; var tt = (c.querySelector('.ss input[type=hidden]') || {}).value || ''; arr.push({ type: tt, date: vcard(c, '.t-date') || null, time: vcard(c, '.t-time') || null, from: vcard(c, '.t-from'), to: vcard(c, '.t-to'), driver: vcard(c, '.t-driver'), car: vcard(c, '.t-car'), plate: vcard(c, '.t-plate'), notes: vcard(c, '.t-notes'), image_url: img }); }
-      else { var en = vcard(c, '.e-name'); if (!en) return; var cat = (c.querySelector('.ss input[type=hidden]') || {}).value || ''; var conf = ((c.querySelector('.e-conf-img') || {}).value || '').trim() || null; arr.push({ name: en, category: cat, kind: type === 'dining' ? 'dining' : 'experience', date: vcard(c, '.e-date') || null, time: vcard(c, '.e-time') || null, location: vcard(c, '.e-location'), address: vcard(c, '.e-address'), notes: vcard(c, '.e-notes'), image_url: img, confirmation_image: conf }); }
+      var conf = ((c.querySelector('.e-conf-img') || {}).value || '').trim() || null;
+      if (type === 'hotel') { var n = vcard(c, '.h-name'); if (!n) return; arr.push({ name: n, location: vcard(c, '.h-location'), address: vcard(c, '.h-address'), checkin_date: vcard(c, '.h-cin-date') || null, checkin_time: vcard(c, '.h-cin-time') || null, checkout_date: vcard(c, '.h-cout-date') || null, checkout_time: vcard(c, '.h-cout-time') || null, room: vcard(c, '.h-room'), confirmation: vcard(c, '.h-conf'), notes: vcard(c, '.h-notes'), image_url: img, confirmation_image: conf }); }
+      else if (type === 'transport') { var hasAny = vcard(c, '.t-from') || vcard(c, '.t-to') || vcard(c, '.t-date'); if (!hasAny) return; var tt = (c.querySelector('.ss input[type=hidden]') || {}).value || ''; arr.push({ type: tt, date: vcard(c, '.t-date') || null, time: vcard(c, '.t-time') || null, from: vcard(c, '.t-from'), to: vcard(c, '.t-to'), driver: vcard(c, '.t-driver'), car: vcard(c, '.t-car'), plate: vcard(c, '.t-plate'), notes: vcard(c, '.t-notes'), image_url: img, confirmation_image: conf }); }
+      else { var en = vcard(c, '.e-name'); if (!en) return; var cat = (c.querySelector('.ss input[type=hidden]') || {}).value || ''; arr.push({ name: en, category: cat, kind: type === 'dining' ? 'dining' : 'experience', date: vcard(c, '.e-date') || null, time: vcard(c, '.e-time') || null, location: vcard(c, '.e-location'), address: vcard(c, '.e-address'), notes: vcard(c, '.e-notes'), image_url: img, confirmation_image: conf }); }
     });
     return arr;
   }

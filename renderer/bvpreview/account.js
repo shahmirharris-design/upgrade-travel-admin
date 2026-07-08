@@ -623,7 +623,12 @@
     ])];
     if (x.address) kids.push(h('p', { class: 'ld-addr', text: x.address }));
     if (x.notes) kids.push(h('p', { class: 'ld-prose', text: x.notes }));
+    ldConf(kids, x);
     return ldCard(no, x.name || 'Your stay', [x.room, x.location].filter(Boolean).join('  ·  '), kids);
+  }
+  /* booking confirmation image (QR / ticket) in the PDF — crossorigin so html2canvas can draw it */
+  function ldConf(kids, x) {
+    if (x && x.confirmation_image) kids.push(h('div', { class: 'ld-conf' }, [h('div', { class: 'ld-conf-k', text: 'Ticket / confirmation — show at the venue' }), h('img', { class: 'ld-conf-img', src: x.confirmation_image, crossorigin: 'anonymous', alt: 'Booking confirmation' })]));
   }
   function ldTransportCard(no, x) {
     var kids = [ldPills([
@@ -632,6 +637,7 @@
       ['Chauffeur', [x.driver, x.car, x.plate].filter(Boolean).join(' · ')]
     ])];
     if (x.notes) kids.push(h('p', { class: 'ld-prose', text: x.notes }));
+    ldConf(kids, x);
     return ldCard(no, x.type || 'Private transfer', [x.from, x.to].filter(Boolean).join('  →  '), kids);
   }
   function ldEntCard(no, x) {
@@ -641,7 +647,7 @@
       ['Where', [x.location, x.address].filter(Boolean).join(' · ')]
     ])];
     if (x.notes) kids.push(h('p', { class: 'ld-prose', text: x.notes }));
-    if (x.confirmation_image) kids.push(h('div', { class: 'ld-conf' }, [h('div', { class: 'ld-conf-k', text: 'Ticket / confirmation — show at the venue' }), h('img', { class: 'ld-conf-img', src: x.confirmation_image, crossorigin: 'anonymous', alt: 'Booking confirmation' })]));
+    ldConf(kids, x);
     return ldCard(no, x.name || 'Experience', x.category || (x.kind === 'dining' ? 'Dining' : 'Experience'), kids);
   }
   function ldBanner(city) {
@@ -1602,7 +1608,8 @@
         x.location ? h('div', { class: 'bv-item-sub', text: x.location + (nights ? '  ·  ' + nights + (nights === 1 ? ' night' : ' nights') : '') }) : null,
         x.address ? h('div', { class: 'bv-item-addr', text: x.address }) : null,
         bvMetaGrid(meta),
-        x.notes ? h('div', { class: 'bv-item-note', text: x.notes }) : null
+        x.notes ? h('div', { class: 'bv-item-note', text: x.notes }) : null,
+        bvConf(x)
       ])
     ]);
   }
@@ -1618,7 +1625,8 @@
         h('h3', { class: 'bv-item-title serif', text: x.type || 'Private transfer' }),
         (x.from || x.to) ? h('div', { class: 'bv-item-sub', text: [x.from, x.to].filter(Boolean).join('  →  ') }) : null,
         bvMetaGrid(meta),
-        x.notes ? h('div', { class: 'bv-item-note', text: x.notes }) : null
+        x.notes ? h('div', { class: 'bv-item-note', text: x.notes }) : null,
+        bvConf(x)
       ])
     ]);
   }
