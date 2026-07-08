@@ -2563,8 +2563,8 @@
     state.itinFlash = { kind: 'note', text: 'Editing ' + (row.itinerary_number || 'this itinerary') + '. Make your changes (photos too), then review & resend — it updates the version in their account.' };
     state.itinView = 'form'; state.tab = 'itineraries'; refreshNav(); renderTab();
   }
-  function itinSection(title, containerId, cards, addLabel, addFn) {
-    return h('div', { class: 'inv-section' }, [h('h3', { class: 'inv-h3', text: title }), h('div', { id: containerId, class: 'itin-cards' }, cards), h('button', { type: 'button', class: 'inv-addline', onclick: addFn, text: addLabel })]);
+  function itinSection(title, containerId, cards, addLabel, addFn, bare) {
+    return h('div', { class: bare ? 'gt-subsec' : 'inv-section' }, [h('h3', { class: bare ? 'gt-subsec-h' : 'inv-h3', text: title }), h('div', { id: containerId, class: 'itin-cards' }, cards), h('button', { type: 'button', class: 'inv-addline', onclick: addFn, text: addLabel })]);
   }
   function itinForm(d) {
     d = d || {};
@@ -2962,28 +2962,25 @@
     var n = g.pods.length;
     var form = h('form', { class: 'inv-form', onsubmit: function (e) { e.preventDefault(); gtGenerate(); } }, [
       h('div', { class: 'inv-section' }, [
-        h('h3', { class: 'inv-h3', text: 'Who is this trip for?' }),
+        h('h3', { class: 'inv-h3', text: 'Trip setup' }),
+        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Who signs in to see it, and a name for your list. Dates and destination fill in automatically from the flights.' }),
+        invField('Trip name (for your list)', 'gt-name', 'text', 'e.g. Loya Family — Croatia & Dubai', g.name),
+        h('span', { class: 'gt-fieldlbl', style: 'margin-top:14px', text: 'Who is this trip for?' }),
         gtSeg(g.target_kind, [['account', 'One shared login'], ['group', 'Linked group (separate logins)']], function (k) { gtCollectAll(); g.target_kind = k; renderTab(); }),
         g.target_kind === 'account'
-          ? h('div', { style: 'margin-top:14px' }, [h('p', { class: 'inv-sublabel', style: 'margin-bottom:8px', text: 'The one account the whole family signs into. Every itinerary below goes here.' }), h('div', { id: 'gt-cust-box' }, g.customer ? [gtCustChip(g.customer)] : [miniCustomerSearch('Search the family account…', function (c) { g.customer = c; var b = document.getElementById('gt-cust-box'); if (b) { b.textContent = ''; b.appendChild(gtCustChip(c)); } })])])
-          : h('div', { style: 'margin-top:14px' }, [h('p', { class: 'inv-sublabel', style: 'margin-bottom:8px', text: 'Each traveller keeps their own login; the group links them so everyone sees every itinerary.' }), gtGroupControl()])
+          ? h('div', { style: 'margin-top:12px' }, [h('div', { id: 'gt-cust-box' }, g.customer ? [gtCustChip(g.customer)] : [miniCustomerSearch('Search the family account…', function (c) { g.customer = c; var b = document.getElementById('gt-cust-box'); if (b) { b.textContent = ''; b.appendChild(gtCustChip(c)); } })])])
+          : h('div', { style: 'margin-top:12px' }, [h('p', { class: 'inv-sublabel', style: 'margin-bottom:8px', text: 'Each traveller keeps their own login; the group links them so everyone sees every itinerary.' }), gtGroupControl()])
       ]),
       h('div', { class: 'inv-section' }, [
-        h('h3', { class: 'inv-h3', text: 'Trip name' }),
-        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 12px', text: 'Just a name for your own list. Dates and destination fill in automatically from the flights.' }),
-        invField('Trip name (for your list)', 'gt-name', 'text', 'e.g. Loya Family — Croatia & Dubai', g.name)
-      ]),
-      h('div', { class: 'inv-section' }, [
-        h('h3', { class: 'inv-h3', text: 'The shared trip — added to every itinerary' }),
-        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Built once and included in all of the itineraries below: the shared flights (from the meeting point onward), plus every hotel, transfer, meal and experience they do together.' }),
+        h('h3', { class: 'inv-h3', text: 'The shared trip' }),
+        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 6px', text: 'Built once and added to every itinerary below: the flights from the meeting point onward, plus every hotel, transfer, meal and experience they do together.' }),
         templateBar(),
-        h('p', { class: 'gt-sub-label', text: 'Shared flights (from the meeting point onward)' }),
-        flightsSection(segs, null, { plain: true })
+        h('div', { class: 'gt-subsec' }, [h('h3', { class: 'gt-subsec-h', text: 'Flights — from the meeting point onward' }), flightsSection(segs, null, { plain: true })]),
+        itinSection('Hotels', 'itin-hotels', (g.shared.hotels || []).map(hotelCard), '+ Add hotel', function () { var c = hotelCard(); document.getElementById('itin-hotels').appendChild(c); initDatePickers(c); }, true),
+        itinSection('Transfers', 'itin-transport', (g.shared.transport || []).map(transportCard), '+ Add transfer', function () { var c = transportCard(); document.getElementById('itin-transport').appendChild(c); initDatePickers(c); }, true),
+        itinSection('Dining', 'itin-dining', (g.shared.entertainment || []).filter(function (x) { return x.kind === 'dining'; }).map(diningCard), '+ Add dining', function () { var c = diningCard(); document.getElementById('itin-dining').appendChild(c); initDatePickers(c); }, true),
+        itinSection('Experiences', 'itin-ent', (g.shared.entertainment || []).filter(function (x) { return x.kind !== 'dining'; }).map(entCard), '+ Add experience', function () { var c = entCard(); document.getElementById('itin-ent').appendChild(c); initDatePickers(c); }, true)
       ]),
-      itinSection('Shared hotels', 'itin-hotels', (g.shared.hotels || []).map(hotelCard), '+ Add hotel', function () { var c = hotelCard(); document.getElementById('itin-hotels').appendChild(c); initDatePickers(c); }),
-      itinSection('Shared transfers', 'itin-transport', (g.shared.transport || []).map(transportCard), '+ Add transport', function () { var c = transportCard(); document.getElementById('itin-transport').appendChild(c); initDatePickers(c); }),
-      itinSection('Shared dining', 'itin-dining', (g.shared.entertainment || []).filter(function (x) { return x.kind === 'dining'; }).map(diningCard), '+ Add dining', function () { var c = diningCard(); document.getElementById('itin-dining').appendChild(c); initDatePickers(c); }),
-      itinSection('Shared experiences', 'itin-ent', (g.shared.entertainment || []).filter(function (x) { return x.kind !== 'dining'; }).map(entCard), '+ Add experience', function () { var c = entCard(); document.getElementById('itin-ent').appendChild(c); initDatePickers(c); }),
       h('div', { class: 'inv-section' }, [
         h('div', { class: 'gt-count-head' }, [
           h('div', null, [h('h3', { class: 'inv-h3', style: 'margin:0', text: 'Itineraries' }), h('p', { class: 'inv-sublabel', style: 'margin:4px 0 0', text: 'One per starting point. Each has its own travellers, title and flights to and from home.' })]),
@@ -2992,16 +2989,16 @@
         h('div', { class: 'gt-itins' }, g.pods.map(gtItinCard))
       ]),
       h('div', { class: 'inv-section' }, [
-        h('h3', { class: 'inv-h3', text: 'Pricing & savings (optional)' }),
-        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Applied to each generated itinerary. Pull from an invoice or type it in.' }),
+        h('h3', { class: 'inv-h3', text: 'Pricing & notes (optional)' }),
+        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'The price is applied to each generated itinerary. Pull it from an invoice or type it in.' }),
         h('div', { class: 'inv-row2' }, [
           h('label', { class: 'inv-field' }, [h('span', { text: 'Pull from invoice no.' }), h('div', { class: 'itin-pull-row' }, [h('input', { id: 'itin-pull-inv', class: 'inv-input', type: 'text', placeholder: 'e.g. INV-100245', autocomplete: 'off', value: g.price_invoice_number || '' }), h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:0 16px; height:46px', onclick: pullInvoicePricing, text: 'Pull' })])]),
           h('div', { class: 'inv-field' }, [h('span', { class: 'seg-lookup-spacer', text: 'x' }), h('span', { id: 'itin-pull-status', class: 'seg-lookup-status', style: 'margin-top:13px' })])
         ]),
         h('div', { class: 'inv-row2' }, [invField('Your price (total, per itinerary)', 'itin-total', 'number', '0.00', g.total_charged), invField('Comparable / retail price', 'itin-comp', 'number', '0.00', g.comparable_total)]),
-        h('input', { type: 'hidden', id: 'itin-cur', value: g.currency || 'USD' })
+        h('input', { type: 'hidden', id: 'itin-cur', value: g.currency || 'USD' }),
+        h('label', { class: 'inv-field', style: 'margin-top:16px' }, [h('span', { text: 'Notes (shown on every itinerary)' }), h('textarea', { id: 'gt-notes', class: 'inv-input inv-textarea', rows: '2', placeholder: 'Anything the travellers should know.', value: g.notes || '' })])
       ]),
-      h('div', { class: 'inv-section' }, [h('h3', { class: 'inv-h3', text: 'Notes (optional)' }), h('textarea', { id: 'gt-notes', class: 'inv-input inv-textarea', rows: '2', placeholder: 'Shown on every itinerary in this group.', value: g.notes || '' })]),
       h('div', { class: 'inv-submit' }, [
         h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:13px 24px', onclick: function () { state.gt = gtBlank(); renderTab(); }, text: 'Cancel' }),
         h('div', { id: 'gt-msg', class: 'msg', style: 'display:none' }),
