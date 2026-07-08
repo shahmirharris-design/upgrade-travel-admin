@@ -1906,26 +1906,53 @@
     if (!state.allQuotes) { sb.from('quotes').select('*').order('created_at', { ascending: false }).limit(60).then(function (r) { state.allQuotes = r.data || []; if (document.activeElement === input) render(); }).catch(function (e) { console.warn('quote lookup load failed', e); }); }
     return section;
   }
+  var ADAM_TAG = 'From the website chat with Adam.';
+  function reqIsAdam(req) { return ('' + (req.trip || '')).indexOf(ADAM_TAG) === 0; }
   async function loadRequests() {
     var box = document.getElementById('qreq-box'); if (!box) return;
     var r = await sb.from('quote_requests').select('*').eq('status', 'new').order('created_at', { ascending: false });
     box = document.getElementById('qreq-box'); if (!box) return;
     var reqs = r.data || []; box.textContent = '';
     if (!reqs.length) { box.appendChild(h('div', { class: 'pkg-empty', text: 'No incoming requests right now.' })); return; }
-    box.appendChild(h('div', { class: 'qreq-wrap' }, reqs.map(reqCard)));
+    /* Adam-sourced requests link back to their chat; pull his brief so nothing he learned is lost */
+    var briefs = {};
+    var adamIds = reqs.filter(reqIsAdam).map(function (q) { return q.id; });
+    if (adamIds.length) {
+      try {
+        var br = await sb.from('conversations').select('qr_id, brief, customer_name').in('qr_id', adamIds);
+        (br.data || []).forEach(function (row) { if (row.qr_id) briefs[row.qr_id] = row; });
+      } catch (e) { /* older sessions may not link */ }
+      box = document.getElementById('qreq-box'); if (!box) return; box.textContent = '';
+    }
+    box.appendChild(h('div', { class: 'qreq-wrap' }, reqs.map(function (q) { return reqCard(q, briefs[q.id]); })));
   }
-  function reqCard(req) {
+  function reqCard(req, convo) {
     var pax = (req.adults || 0) + (req.children || 0) + (req.infants || 0), bits = [];
-    if (req.trip) bits.push(req.trip);
+    var isAdam = reqIsAdam(req);
+    var notes = ('' + (req.trip || '')).replace(ADAM_TAG, '').trim();
     if (req.cabin) bits.push(req.cabin);
     if (pax) bits.push(pax + ' traveler' + (pax > 1 ? 's' : ''));
     if (req.depart) bits.push(req.depart + (req.return_date ? ' – ' + req.return_date : ''));
+    if (req.trip_type) bits.push('Purpose: ' + req.trip_type);
+    /* everything Adam extracted from the conversation, minus the empty slots */
+    var briefRows = [];
+    if (convo && convo.brief) {
+      ('' + convo.brief).split(/\n+/).forEach(function (line) {
+        var mm = line.match(/^([^:]{2,24}):\s*(.+)$/);
+        if (mm && mm[2] && !/not mentioned|not given/i.test(mm[2])) briefRows.push([mm[1].trim(), mm[2].trim()]);
+      });
+    }
     return h('div', { class: 'qreq-card' }, [
       h('div', { class: 'qreq-top' }, [
         h('div', null, [h('div', { class: 'qreq-name', text: req.name || req.email || 'Quote request' }), h('div', { class: 'qreq-route', text: [req.route_from, req.route_to].filter(Boolean).join(' → ') })]),
-        h('span', { class: 'qreq-deliv qreq-deliv--' + (req.delivery || 'account'), text: req.delivery === 'call' ? 'Wants a call' : 'Wants it in account' })
+        h('div', { class: 'qreq-badges' }, [
+          h('span', { class: 'qreq-src' + (isAdam ? ' qreq-src--adam' : ''), text: isAdam ? 'via Adam (chat)' : 'Website form' }),
+          h('span', { class: 'qreq-deliv qreq-deliv--' + (req.delivery || 'account'), text: req.delivery === 'call' ? 'Wants a call' : 'Wants it in account' })
+        ])
       ]),
       bits.length ? h('div', { class: 'qreq-meta', text: bits.join('  ·  ') }) : null,
+      notes ? h('div', { class: 'qreq-notes', text: notes }) : null,
+      briefRows.length ? h('div', { class: 'qreq-brief' }, [h('div', { class: 'qreq-brief-h', text: 'What Adam learned' })].concat(briefRows.map(function (b) { return h('span', { class: 'qreq-brief-pill' }, [h('b', { text: b[0] }), ' ' + b[1]]); }))) : null,
       h('div', { class: 'qreq-foot' }, [
         h('div', { class: 'qreq-contact', text: [req.email, req.phone].filter(Boolean).join('  ·  ') }),
         h('div', { class: 'qreq-actions' }, [
