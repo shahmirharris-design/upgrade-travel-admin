@@ -689,3 +689,17 @@ input{ font-family:inherit; }
 .set-dl-link:hover{ color:var(--gold-soft); }
 
 .sent-bar-note{ font-size:12.5px; color:var(--stone); margin-left:4px; }
+
+/* confirmation-image uploader (dining / entertainment cards) */
+.conf-field{ margin-top:2px; }
+.conf-hint{ font-size:11.5px; color:var(--stone); margin:2px 0 8px; }
+.conf-row{ display:flex; align-items:center; gap:14px; }
+.conf-thumb{ width:74px; height:74px; flex:none; border:1px solid var(--line); border-radius:9px; background:#fff center/contain no-repeat; }
+.conf-thumb.has-img{ border-color:var(--gold); }
+.conf-actions{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.conf-btn{ display:inline-block; cursor:pointer; font-size:12.5px; font-weight:500; padding:8px 14px; border:1px solid rgba(169,133,76,.5); border-radius:8px; color:var(--ink); background:transparent; }
+.conf-btn:hover{ background:rgba(169,133,76,.12); border-color:var(--gold); }
+.conf-rm{ color:var(--stone); }
+.conf-status{ font-size:12px; color:var(--stone); }
+.conf-status.cs-ok{ color:#2F6B33; }
+.conf-status.cs-err{ color:#a3402f; }

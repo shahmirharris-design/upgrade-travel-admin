@@ -2290,6 +2290,45 @@
   }
   /* photo picked at review time rides along invisibly so a back-to-edit round trip keeps it */
   function cardImgKeep(x) { return h('input', { type: 'hidden', class: 'card-img-url', value: (x && x.image_url) || '' }); }
+  /* booking confirmation image (QR / barcode / email screenshot) the customer shows at the venue */
+  function setConf(el, m, k) { if (el) { el.textContent = m; el.className = 'conf-status' + (k ? ' cs-' + k : ''); } }
+  async function uploadConfImage(file, statusEl, hidden, thumb, btnLabel) {
+    if (!/^image\//.test(file.type)) { setConf(statusEl, 'Please choose an image file.', 'err'); return; }
+    if (file.size > 6 * 1024 * 1024) { setConf(statusEl, 'Image is too large (max 6 MB).', 'err'); return; }
+    setConf(statusEl, 'Uploading…', '');
+    var ext = ((file.name || '').split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+    var id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now() + '-' + Math.round(Math.random() * 1e9));
+    var path = 'conf/' + id + '.' + ext;
+    var up;
+    try { up = await sb.storage.from('itinerary-media').upload(path, file, { upsert: true, contentType: file.type }); }
+    catch (e) { up = { error: e }; }
+    if (up.error) { setConf(statusEl, up.error.message || 'Upload failed.', 'err'); return; }
+    var pub = sb.storage.from('itinerary-media').getPublicUrl(path);
+    var url = pub && pub.data && pub.data.publicUrl;
+    if (!url) { setConf(statusEl, 'Upload failed.', 'err'); return; }
+    hidden.value = url;
+    thumb.style.backgroundImage = 'url("' + url.replace(/["\\\r\n]/g, '') + '")'; thumb.classList.add('has-img');
+    if (btnLabel) btnLabel.textContent = 'Replace';
+    setConf(statusEl, 'Uploaded ✓', 'ok');
+  }
+  function confField(x) {
+    var url = (x && x.confirmation_image) || '';
+    var hidden = h('input', { type: 'hidden', class: 'e-conf-img', value: url });
+    var thumb = h('div', { class: 'conf-thumb' + (url ? ' has-img' : '') });
+    if (url) thumb.style.backgroundImage = 'url("' + url.replace(/["\\\r\n]/g, '') + '")';
+    var status = h('span', { class: 'conf-status' });
+    var file = h('input', { type: 'file', accept: 'image/*', class: 'conf-file', style: 'display:none' });
+    var lbl = h('span', { text: url ? 'Replace' : 'Upload' });
+    file.addEventListener('change', function () { if (file.files && file.files[0]) uploadConfImage(file.files[0], status, hidden, thumb, lbl); });
+    var uploadBtn = h('label', { class: 'conf-btn' }, [lbl, file]);
+    var removeBtn = h('button', { type: 'button', class: 'conf-btn conf-rm', onclick: function () { hidden.value = ''; thumb.style.backgroundImage = ''; thumb.classList.remove('has-img'); lbl.textContent = 'Upload'; setConf(status, '', ''); }, text: 'Remove' });
+    return h('div', { class: 'inv-field conf-field' }, [
+      h('span', { text: 'Confirmation / ticket (optional)' }),
+      h('p', { class: 'conf-hint', text: 'Upload the QR code, barcode or booking-confirmation image the customer shows at the venue. It appears on their itinerary and the PDF.' }),
+      h('div', { class: 'conf-row' }, [thumb, h('div', { class: 'conf-actions' }, [uploadBtn, removeBtn, status])]),
+      hidden
+    ]);
+  }
   function hotelCard(x) {
     return h('div', { class: 'itin-card', 'data-itin': 'hotel' }, [itinRm(), cardImgKeep(x),
       h('div', { class: 'inv-row2' }, [poiField('Hotel', 'h-name', x && x.name, 'e.g. Burj Al Arab', function (p, inp) { fillFromPoi(p, inp, 'h-location', 'h-address'); }, 'h-location'), cityField('City', 'h-location', x && x.location, 'Start typing a city…')]),
@@ -2313,7 +2352,8 @@
       h('div', { class: 'inv-row2' }, [poiField('Name', 'e-name', x && x.name, 'e.g. Nobu Dubai', function (p, inp) { fillFromPoi(p, inp, 'e-location', 'e-address'); }, 'e-location'), h('label', { class: 'inv-field' }, [h('span', { text: 'Type' }), styledSelect(null, (x && x.category) || 'Restaurant', DINING_CATEGORIES, null)])]),
       h('div', { class: 'inv-row2' }, [cityField('City', 'e-location', x && x.location, 'Start typing a city…'), cdt('Date & time', 'e-date', 'e-time', x && x.date, x && x.time)]),
       addrField('Address', 'e-address', x && x.address, 'Auto-fills, or click to pick a location', 'e-name', 'e-location'),
-      clabel('Notes', 'e-notes', x && x.notes, 'Optional')
+      clabel('Notes', 'e-notes', x && x.notes, 'Optional'),
+      confField(x)
     ]);
   }
   function entCard(x) {
@@ -2321,7 +2361,8 @@
       h('div', { class: 'inv-row2' }, [poiField('Name', 'e-name', x && x.name, 'e.g. Desert safari', function (p, inp) { fillFromPoi(p, inp, 'e-location', 'e-address'); }, 'e-location'), h('label', { class: 'inv-field' }, [h('span', { text: 'Category' }), styledSelect(null, (x && x.category) || 'Experience', ENT_CATEGORIES, null)])]),
       h('div', { class: 'inv-row2' }, [cityField('City', 'e-location', x && x.location, 'Start typing a city…'), cdt('Date & time', 'e-date', 'e-time', x && x.date, x && x.time)]),
       addrField('Address', 'e-address', x && x.address, 'Auto-fills, or click to pick a location', 'e-name', 'e-location'),
-      clabel('Notes', 'e-notes', x && x.notes, 'Optional')
+      clabel('Notes', 'e-notes', x && x.notes, 'Optional'),
+      confField(x)
     ]);
   }
   function readCards(containerId, type) {
@@ -2330,7 +2371,7 @@
       var img = ((c.querySelector('.card-img-url') || {}).value || '').trim() || null;
       if (type === 'hotel') { var n = vcard(c, '.h-name'); if (!n) return; arr.push({ name: n, location: vcard(c, '.h-location'), address: vcard(c, '.h-address'), checkin_date: vcard(c, '.h-cin-date') || null, checkin_time: vcard(c, '.h-cin-time') || null, checkout_date: vcard(c, '.h-cout-date') || null, checkout_time: vcard(c, '.h-cout-time') || null, room: vcard(c, '.h-room'), confirmation: vcard(c, '.h-conf'), notes: vcard(c, '.h-notes'), image_url: img }); }
       else if (type === 'transport') { var hasAny = vcard(c, '.t-from') || vcard(c, '.t-to') || vcard(c, '.t-date'); if (!hasAny) return; var tt = (c.querySelector('.ss input[type=hidden]') || {}).value || ''; arr.push({ type: tt, date: vcard(c, '.t-date') || null, time: vcard(c, '.t-time') || null, from: vcard(c, '.t-from'), to: vcard(c, '.t-to'), driver: vcard(c, '.t-driver'), car: vcard(c, '.t-car'), plate: vcard(c, '.t-plate'), notes: vcard(c, '.t-notes'), image_url: img }); }
-      else { var en = vcard(c, '.e-name'); if (!en) return; var cat = (c.querySelector('.ss input[type=hidden]') || {}).value || ''; arr.push({ name: en, category: cat, kind: type === 'dining' ? 'dining' : 'experience', date: vcard(c, '.e-date') || null, time: vcard(c, '.e-time') || null, location: vcard(c, '.e-location'), address: vcard(c, '.e-address'), notes: vcard(c, '.e-notes'), image_url: img }); }
+      else { var en = vcard(c, '.e-name'); if (!en) return; var cat = (c.querySelector('.ss input[type=hidden]') || {}).value || ''; var conf = ((c.querySelector('.e-conf-img') || {}).value || '').trim() || null; arr.push({ name: en, category: cat, kind: type === 'dining' ? 'dining' : 'experience', date: vcard(c, '.e-date') || null, time: vcard(c, '.e-time') || null, location: vcard(c, '.e-location'), address: vcard(c, '.e-address'), notes: vcard(c, '.e-notes'), image_url: img, confirmation_image: conf }); }
     });
     return arr;
   }

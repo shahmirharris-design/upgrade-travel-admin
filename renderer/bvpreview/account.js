@@ -641,6 +641,7 @@
       ['Where', [x.location, x.address].filter(Boolean).join(' · ')]
     ])];
     if (x.notes) kids.push(h('p', { class: 'ld-prose', text: x.notes }));
+    if (x.confirmation_image) kids.push(h('div', { class: 'ld-conf' }, [h('div', { class: 'ld-conf-k', text: 'Ticket / confirmation — show at the venue' }), h('img', { class: 'ld-conf-img', src: x.confirmation_image, crossorigin: 'anonymous', alt: 'Booking confirmation' })]));
     return ldCard(no, x.name || 'Experience', x.category || (x.kind === 'dining' ? 'Dining' : 'Experience'), kids);
   }
   function ldBanner(city) {
@@ -1632,9 +1633,22 @@
         x.category ? h('span', { class: 'bv-cab', text: x.category }) : null,
         h('h3', { class: 'bv-item-title serif', text: x.name || 'Experience' }),
         bvMetaGrid(meta),
-        x.notes ? h('div', { class: 'bv-item-note', text: x.notes }) : null
+        x.notes ? h('div', { class: 'bv-item-note', text: x.notes }) : null,
+        bvConf(x)
       ])
     ]);
+  }
+  /* booking confirmation (QR / barcode / email image) the traveller shows at the venue */
+  function bvConf(x) {
+    if (!x || !x.confirmation_image) return null;
+    var img = h('img', { class: 'bv-conf-img', src: x.confirmation_image, alt: 'Booking confirmation', loading: 'lazy' });
+    img.addEventListener('click', function () { bvLightbox(x.confirmation_image); });
+    return h('div', { class: 'bv-conf' }, [h('div', { class: 'bv-conf-k', text: 'Your ticket · show this at the venue' }), img, h('div', { class: 'bv-conf-hint', text: 'Tap to enlarge' })]);
+  }
+  function bvLightbox(url) {
+    var ov = h('div', { class: 'bv-lightbox' }, [h('img', { src: url, alt: '' })]);
+    ov.addEventListener('click', function () { ov.remove(); });
+    document.body.appendChild(ov);
   }
   function bvChapterHead(num, c) {
     return h('div', { class: 'bv-chapter-hero bv-ph bv-ph-0' }, [
