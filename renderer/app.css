@@ -732,3 +732,26 @@ input{ font-family:inherit; }
 .bag-add{ margin-top:0; }
 
 .gt-sub-label{ font-size:12.5px; font-weight:600; color:var(--ink-2); margin:6px 0 8px; }
+
+/* group-trip: count stepper + collapsible itinerary cards (single-page builder) */
+.gt-count-head{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }
+.gt-count-pick{ display:flex; align-items:center; gap:10px; flex:none; }
+.gt-count-lbl{ font-size:12.5px; color:var(--ink-2); }
+.gt-stepper{ display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:9px; overflow:hidden; }
+.gt-step-btn{ width:34px; height:34px; border:0; background:#fff; color:var(--ink); font-size:18px; line-height:1; cursor:pointer; }
+.gt-step-btn:hover{ background:rgba(169,133,76,.14); }
+.gt-step-n{ min-width:36px; text-align:center; font-weight:600; font-size:15px; color:var(--ink); font-variant-numeric:tabular-nums; }
+.gt-itins{ display:flex; flex-direction:column; gap:12px; }
+.gt-itin{ border:1px solid var(--line); border-radius:13px; background:#fff; overflow:hidden; }
+.gt-itin-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 16px; cursor:pointer; }
+.gt-itin-head:hover{ background:rgba(169,133,76,.05); }
+.gt-itin-head-main{ display:flex; align-items:baseline; gap:12px; min-width:0; }
+.gt-itin-num{ font-family:var(--serif); font-size:16px; color:var(--ink); flex:none; }
+.gt-itin-summ{ font-size:12.5px; color:var(--stone); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gt-itin-head-act{ display:flex; align-items:center; gap:12px; flex:none; }
+.gt-itin-rm{ border:0; background:none; color:var(--stone); font-size:19px; line-height:1; cursor:pointer; padding:0 2px; }
+.gt-itin-rm:hover{ color:#a3402f; }
+.gt-itin-chev{ width:9px; height:9px; border-right:2px solid var(--stone); border-bottom:2px solid var(--stone); transform:rotate(-45deg); transition:transform .18s; }
+.gt-itin.is-open .gt-itin-chev{ transform:rotate(45deg); }
+.gt-itin-body{ display:none; padding:6px 16px 18px; border-top:1px solid var(--line); }
+.gt-itin.is-open .gt-itin-body{ display:block; }

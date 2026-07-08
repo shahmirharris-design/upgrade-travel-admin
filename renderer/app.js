@@ -1823,7 +1823,7 @@
   async function saveAsTemplate(name, btn) {
     name = (name || '').trim(); if (!name) return;
     var d;
-    if (state.tab === 'grouptrips') { gtCollectSetup(); var gg = state.gt; d = { title: gg.title, destination: gg.destination, segments: gg.shared.segments, hotels: gg.shared.hotels, transport: gg.shared.transport, entertainment: gg.shared.entertainment, line_items: [], pax_adults: 2, pax_children: 0, pax_infants: 0, currency: gg.currency, comparable_total: gg.comparable_total }; }
+    if (state.tab === 'grouptrips') { gtCollectAll(); var gg = state.gt; d = { title: gg.title, destination: gg.destination, segments: gg.shared.segments, hotels: gg.shared.hotels, transport: gg.shared.transport, entertainment: gg.shared.entertainment, line_items: [], pax_adults: 2, pax_children: 0, pax_infants: 0, currency: gg.currency, comparable_total: gg.comparable_total }; }
     else d = state.builderTab === 'itinerary' ? collectItin() : collectDraft();
     var payload = { name: name, title: d.title || null, destination: d.destination || null, segments: d.segments || [], line_items: d.line_items || [], hotels: d.hotels || [], transport: d.transport || [], entertainment: d.entertainment || [], pax_adults: d.pax_adults, pax_children: d.pax_children, pax_infants: d.pax_infants, currency: d.currency || 'USD', comparable_total: d.comparable_total || null, notes: d.notes || null };
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
@@ -1975,7 +1975,7 @@
   }
   function applyTemplate(tpl) {
     if (state.tab === 'grouptrips') {
-      gtCollectSetup();
+      gtCollectAll();
       var g = state.gt;
       g.shared = { segments: tpl.segments || [], trip_type: detectTripType(tpl), hotels: tpl.hotels || [], transport: tpl.transport || [], entertainment: tpl.entertainment || [] };
       if (!g.destination && tpl.destination) g.destination = tpl.destination;
@@ -2811,9 +2811,7 @@
   function tabGroupTrips() {
     if (!state.gt) state.gt = gtBlank();
     var v = state.gt.view;
-    if (v === 'setup') return gtSetupView();
-    if (v === 'pods') return gtPodsView();
-    if (v === 'podedit') return gtPodEditView();
+    if (v === 'setup') return gtBuildView();
     return gtListView();
   }
   /* reusable customer type-ahead that just calls back with the picked profile */
@@ -2917,7 +2915,7 @@
       h('div', { class: 'adm-confirm-actions', style: 'margin-top:18px' }, [h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto', onclick: closeAdminOverlay, text: 'Cancel' }), h('button', { type: 'button', class: 'btn btn-primary', style: 'width:auto', onclick: save, text: 'Add members' })])
     ]), 'Add members');
   }
-  function gtCollectSetup() {
+  function gtCollectAll() {
     var g = state.gt; if (!g) return;
     g.name = val('gt-name');
     g.total_charged = parseFloat(val('itin-total')) || null; g.comparable_total = parseFloat(val('itin-comp')) || null;
@@ -2929,6 +2927,22 @@
       g.shared = { segments: readLegsFrom(document.getElementById('inv-segs'), true), trip_type: readTripType(), hotels: readCards('itin-hotels', 'hotel'), transport: readCards('itin-transport', 'transport'), entertainment: readCards('itin-dining', 'dining').concat(readCards('itin-ent', 'ent')) };
       g.destination = gtDeriveDest(g.shared.segments); /* auto from the shared flights, no field to fill */
     }
+    var itinEls = document.querySelectorAll('.gt-itin');
+    if (itinEls.length) {
+      var pods = [];
+      Array.prototype.forEach.call(itinEls, function (c) {
+        var pax = parseInt((c.querySelector('.gt-i-pax') || {}).value, 10); if (isNaN(pax) || pax < 1) pax = null;
+        pods.push({
+          label: ((c.querySelector('.gt-i-label') || {}).value || '').trim(),
+          title: ((c.querySelector('.gt-i-title') || {}).value || '').trim() || null,
+          pax: pax,
+          travelers: ((c.querySelector('.gt-i-travelers') || {}).value || '').trim(),
+          out_segments: readLegsFrom(c.querySelector('.inv-segs[data-leg="out"]')),
+          ret_segments: readLegsFrom(c.querySelector('.inv-segs[data-leg="ret"]'))
+        });
+      });
+      g.pods = pods;
+    }
   }
   /* the trip's destinations = the shared journey's stop cities, excluding the meeting/hub city */
   function gtDeriveDest(segs) {
@@ -2936,30 +2950,32 @@
     segs.forEach(function (s) { var t = s && s.to; if (t && t.code && t.code !== hub && t.city && !seen[t.code]) { seen[t.code] = 1; cities.push(t.city); } });
     return cities.slice(0, 3).join(' & ') || null;
   }
-  function gtSetupView() {
+  function gtBuildView() {
     state.gtBuilding = true;
     var g = state.gt, wrap = h('div');
-    wrap.appendChild(mainHead(g.editing_id ? 'Edit group trip' : 'New group trip', 'Build the shared trip once. Next, add one itinerary per departure city — we combine them automatically.'));
+    if (!g.pods.length) g.pods = [{ label: '', title: null, pax: null, travelers: '', out_segments: [], ret_segments: [] }];
+    wrap.appendChild(mainHead(g.editing_id ? 'Edit group trip' : 'New group trip', 'One trip, several itineraries. Build the shared part once, then fill in each itinerary’s own start, travellers and flights.'));
     var body = h('div', { class: 'main-body' });
     if (state.gtFlash) { body.appendChild(flashEl(state.gtFlash, false)); state.gtFlash = null; }
     body.appendChild(gtItinBanner());
     var segs = (g.shared.segments && g.shared.segments.length) ? g.shared.segments : [null];
-    var form = h('form', { class: 'inv-form', onsubmit: function (e) { e.preventDefault(); gtContinueToPods(); } }, [
+    var n = g.pods.length;
+    var form = h('form', { class: 'inv-form', onsubmit: function (e) { e.preventDefault(); gtGenerate(); } }, [
       h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'Who is this trip for?' }),
-        gtSeg(g.target_kind, [['account', 'One shared login'], ['group', 'Linked group (separate logins)']], function (k) { gtCollectSetup(); g.target_kind = k; renderTab(); }),
+        gtSeg(g.target_kind, [['account', 'One shared login'], ['group', 'Linked group (separate logins)']], function (k) { gtCollectAll(); g.target_kind = k; renderTab(); }),
         g.target_kind === 'account'
-          ? h('div', { style: 'margin-top:14px' }, [h('p', { class: 'inv-sublabel', style: 'margin-bottom:8px', text: 'The one account the whole family signs into. Every city group’s itinerary goes here.' }), h('div', { id: 'gt-cust-box' }, g.customer ? [gtCustChip(g.customer)] : [miniCustomerSearch('Search the family account…', function (c) { g.customer = c; var b = document.getElementById('gt-cust-box'); if (b) { b.textContent = ''; b.appendChild(gtCustChip(c)); } })])])
+          ? h('div', { style: 'margin-top:14px' }, [h('p', { class: 'inv-sublabel', style: 'margin-bottom:8px', text: 'The one account the whole family signs into. Every itinerary below goes here.' }), h('div', { id: 'gt-cust-box' }, g.customer ? [gtCustChip(g.customer)] : [miniCustomerSearch('Search the family account…', function (c) { g.customer = c; var b = document.getElementById('gt-cust-box'); if (b) { b.textContent = ''; b.appendChild(gtCustChip(c)); } })])])
           : h('div', { style: 'margin-top:14px' }, [h('p', { class: 'inv-sublabel', style: 'margin-bottom:8px', text: 'Each traveller keeps their own login; the group links them so everyone sees every itinerary.' }), gtGroupControl()])
       ]),
       h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'Trip name' }),
-        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 12px', text: 'Just a name for your own list. The dates and destination fill in automatically from the flights, and each traveller group gets its own title in the next step.' }),
+        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 12px', text: 'Just a name for your own list. Dates and destination fill in automatically from the flights.' }),
         invField('Trip name (for your list)', 'gt-name', 'text', 'e.g. Loya Family — Croatia & Dubai', g.name)
       ]),
       h('div', { class: 'inv-section' }, [
-        h('h3', { class: 'inv-h3', text: 'The shared trip — everything everyone does together' }),
-        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Built once, applied to every traveller: the shared flights (from the meeting point onward), plus all the hotels, transfers, dining and experiences below. Each traveller group adds only its own flights to and from home in the next step.' }),
+        h('h3', { class: 'inv-h3', text: 'The shared trip — added to every itinerary' }),
+        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Built once and included in all of the itineraries below: the shared flights (from the meeting point onward), plus every hotel, transfer, meal and experience they do together.' }),
         templateBar(),
         h('p', { class: 'gt-sub-label', text: 'Shared flights (from the meeting point onward)' }),
         flightsSection(segs, null, { plain: true })
@@ -2968,6 +2984,13 @@
       itinSection('Shared transfers', 'itin-transport', (g.shared.transport || []).map(transportCard), '+ Add transport', function () { var c = transportCard(); document.getElementById('itin-transport').appendChild(c); initDatePickers(c); }),
       itinSection('Shared dining', 'itin-dining', (g.shared.entertainment || []).filter(function (x) { return x.kind === 'dining'; }).map(diningCard), '+ Add dining', function () { var c = diningCard(); document.getElementById('itin-dining').appendChild(c); initDatePickers(c); }),
       itinSection('Shared experiences', 'itin-ent', (g.shared.entertainment || []).filter(function (x) { return x.kind !== 'dining'; }).map(entCard), '+ Add experience', function () { var c = entCard(); document.getElementById('itin-ent').appendChild(c); initDatePickers(c); }),
+      h('div', { class: 'inv-section' }, [
+        h('div', { class: 'gt-count-head' }, [
+          h('div', null, [h('h3', { class: 'inv-h3', style: 'margin:0', text: 'Itineraries' }), h('p', { class: 'inv-sublabel', style: 'margin:4px 0 0', text: 'One per starting point. Each has its own travellers, title and flights to and from home.' })]),
+          h('div', { class: 'gt-count-pick' }, [h('span', { class: 'gt-count-lbl', text: 'How many?' }), gtCountStepper(n)])
+        ]),
+        h('div', { class: 'gt-itins' }, g.pods.map(gtItinCard))
+      ]),
       h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'Pricing & savings (optional)' }),
         h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Applied to each generated itinerary. Pull from an invoice or type it in.' }),
@@ -2982,26 +3005,65 @@
       h('div', { class: 'inv-submit' }, [
         h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:13px 24px', onclick: function () { state.gt = gtBlank(); renderTab(); }, text: 'Cancel' }),
         h('div', { id: 'gt-msg', class: 'msg', style: 'display:none' }),
-        h('button', { type: 'submit', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Continue to itineraries →' })
+        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto', onclick: function (e) { gtSaveOnly(e.target); }, text: 'Save for later' }),
+        h('button', { type: 'submit', id: 'gt-generate-btn', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Generate ' + n + ' itinerar' + (n === 1 ? 'y' : 'ies') })
       ])
     ]);
     body.appendChild(form); wrap.appendChild(body);
     setTimeout(function () { relabelSegs(); loadTemplates(); initDatePickers(form); }, 0);
     return wrap;
   }
+  function gtCountStepper(n) {
+    return h('div', { class: 'gt-stepper' }, [
+      h('button', { type: 'button', class: 'gt-step-btn', title: 'One fewer', onclick: function () { gtSetCount(state.gt.pods.length - 1); }, text: '−' }),
+      h('span', { class: 'gt-step-n', text: '' + n }),
+      h('button', { type: 'button', class: 'gt-step-btn', title: 'One more', onclick: function () { gtSetCount(state.gt.pods.length + 1); }, text: '+' })
+    ]);
+  }
+  function gtSetCount(n) {
+    var g = state.gt; gtCollectAll();
+    n = Math.max(1, Math.min(10, n));
+    while (g.pods.length < n) g.pods.push({ label: '', title: null, pax: null, travelers: '', out_segments: [], ret_segments: [] });
+    while (g.pods.length > n) g.pods.pop();
+    renderTab();
+  }
+  function gtItinCard(pod, i) {
+    var sharedR = gtSharedRoute(state.gt.shared.segments), meet = sharedR ? sharedR.split(' → ')[0] : 'the meeting point';
+    var pax = gtPodPax(pod);
+    var summ = [pod.title, pax + ' traveller' + (pax > 1 ? 's' : '')].filter(Boolean).join('   ·   ');
+    var body = h('div', { class: 'gt-itin-body' }, [
+      h('div', { class: 'inv-row2', style: 'margin-bottom:16px' }, [
+        h('label', { class: 'inv-field' }, [h('span', { text: 'Starting point' }), h('input', { class: 'inv-input gt-i-label', type: 'text', placeholder: 'e.g. Detroit', autocomplete: 'off', value: pod.label || '' })]),
+        h('label', { class: 'inv-field' }, [h('span', { text: 'Display title (shown to the customer)' }), h('input', { class: 'inv-input gt-i-title', type: 'text', placeholder: 'Defaults to the trip name', autocomplete: 'off', value: pod.title || '' })])
+      ]),
+      h('div', { class: 'inv-row2', style: 'margin-bottom:16px' }, [
+        h('label', { class: 'inv-field' }, [h('span', { text: 'Number of travellers' }), h('input', { class: 'inv-input gt-i-pax', type: 'number', min: '1', step: '1', value: pod.pax != null ? pod.pax : '' })]),
+        h('div')
+      ]),
+      h('label', { class: 'inv-field' }, [h('span', { text: 'Traveller names (optional)' }), h('textarea', { class: 'inv-input inv-textarea gt-i-travelers', rows: '2', placeholder: 'e.g.\nMr Ahmed Loya\nMrs Loya', value: pod.travelers || '' })]),
+      h('p', { class: 'gt-sub-label', style: 'margin-top:14px', text: 'Their flight(s) to ' + meet + ' — departure' }),
+      podLegs('out', podOut(pod)),
+      h('div', { class: 'gt-mid-note' }, [h('span', { class: 'gt-mid-line' }), h('span', { class: 'gt-mid-text', text: sharedR ? 'Shared trip  ·  ' + sharedR : 'The shared trip goes here' }), h('span', { class: 'gt-mid-line' })]),
+      h('p', { class: 'gt-sub-label', text: 'Their flight(s) home from ' + meet + ' — return' }),
+      podLegs('ret', podRet(pod))
+    ]);
+    var card = h('div', { class: 'gt-itin is-open' });
+    var head = h('div', { class: 'gt-itin-head' }, [
+      h('div', { class: 'gt-itin-head-main' }, [h('span', { class: 'gt-itin-num', text: 'Itinerary ' + (i + 1) }), h('span', { class: 'gt-itin-summ', text: (pod.label ? pod.label + (summ ? '   ·   ' + summ : '') : summ) })]),
+      h('div', { class: 'gt-itin-head-act' }, [
+        state.gt.pods.length > 1 ? h('button', { type: 'button', class: 'gt-itin-rm', title: 'Remove this itinerary', onclick: function (e) { e.stopPropagation(); gtCollectAll(); state.gt.pods.splice(i, 1); renderTab(); }, text: '×' }) : null,
+        h('span', { class: 'gt-itin-chev' })
+      ])
+    ]);
+    head.addEventListener('click', function (e) { if (e.target.closest('.gt-itin-rm')) return; card.classList.toggle('is-open'); });
+    card.appendChild(head); card.appendChild(body);
+    return card;
+  }
   function gtItinBanner() {
     return h('div', { class: 'gt-banner' }, [
       h('span', { class: 'gt-banner-tag', text: 'Itinerary' }),
       h('span', { class: 'gt-banner-text', text: 'One trip, several itineraries. Build the shared part once; each departure city becomes its own full itinerary in the account.' })
     ]);
-  }
-  function gtContinueToPods() {
-    gtCollectSetup(); var g = state.gt, msg = document.getElementById('gt-msg');
-    if (g.target_kind === 'account' && !g.customer) { showInvMsg(msg, 'Pick the shared account first.', 'err'); return; }
-    if (g.target_kind === 'group' && (!g.group || !g.group.id)) { showInvMsg(msg, 'Pick or create a linked group first.', 'err'); return; }
-    var s = g.shared;
-    if (!(s.segments && s.segments.length) && !(s.hotels && s.hotels.length) && !(s.transport && s.transport.length) && !(s.entertainment && s.entertainment.length)) { showInvMsg(msg, 'Add at least one shared flight, hotel, transfer or experience.', 'err'); return; }
-    g.view = 'pods'; renderTab();
   }
   function gtSharedRoute(segs) {
     segs = segs || []; if (!segs.length) return '';
@@ -3026,94 +3088,6 @@
   function gtHubCode() { var s = state.gt.shared.segments || []; return s[0] && s[0].from && s[0].from.code; }
   function podOut(pod) { return pod.out_segments || (pod.segments ? gtSplitPod(pod.segments, gtHubCode()).out : []); }
   function podRet(pod) { return pod.ret_segments || (pod.segments ? gtSplitPod(pod.segments, gtHubCode()).ret : []); }
-  function gtPodCard(pod, i) {
-    var pax = gtPodPax(pod);
-    var outR = gtSharedRoute(podOut(pod)), retR = gtSharedRoute(podRet(pod));
-    var routes = [outR ? 'Out  ' + outR : '', retR ? 'Home  ' + retR : ''].filter(Boolean).join('      ·      ') || 'No flights yet';
-    return h('div', { class: 'pkg-card' }, [
-      h('div', { class: 'pkg-card-main' }, [
-        h('div', { class: 'pkg-card-name', text: pod.label || ('Itinerary ' + (i + 1)) }),
-        h('div', { class: 'pkg-card-sub', text: [pod.title, routes].filter(Boolean).join('      ·      ') }),
-        h('div', { class: 'gt-pod-travelers', text: pax + ' traveller' + (pax > 1 ? 's' : '') + (pod.travelers ? '  ·  ' + pod.travelers.split(/[\n,]+/).map(function (x) { return x.trim(); }).filter(Boolean).join(', ') : '') })
-      ]),
-      h('div', { class: 'pkg-card-actions' }, [
-        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto', onclick: function () { gtEditPod(i); }, text: 'Edit' }),
-        h('button', { type: 'button', class: 'btn btn-ghost pkg-del-btn', style: 'width:auto', onclick: function () { state.gt.pods.splice(i, 1); renderTab(); }, text: 'Remove' })
-      ])
-    ]);
-  }
-  function gtEditPod(i) { var g = state.gt; g.podDraft = JSON.parse(JSON.stringify(g.pods[i])); g.podIndex = i; g.view = 'podedit'; renderTab(); }
-  function gtPodsView() {
-    var g = state.gt, wrap = h('div');
-    wrap.appendChild(mainHead('Itineraries', 'Add one itinerary per departure city. Each is that city’s flights to and from home; the shared trip is inserted in the middle automatically.'));
-    var body = h('div', { class: 'main-body' });
-    if (state.gtFlash) { body.appendChild(flashEl(state.gtFlash, false)); state.gtFlash = null; }
-    body.appendChild(gtItinBanner());
-    body.appendChild(h('div', { class: 'gt-summary' }, [
-      h('div', { class: 'gt-summary-main' }, [
-        h('div', { class: 'gt-summary-title', text: (g.name || 'Group trip') + (g.destination ? ' · ' + g.destination : '') }),
-        h('div', { class: 'gt-summary-sub', text: [(g.target_kind === 'account' ? ('Shared account: ' + (g.customer ? fullName(g.customer) : '—')) : ('Linked group: ' + (g.group ? g.group.name : '—'))), 'Shared: ' + (gtSharedRoute(g.shared.segments) || 'no flights') + gtSharedExtras(g.shared)].join('  ·  ') })
-      ]),
-      h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto', onclick: function () { g.view = 'setup'; renderTab(); }, text: '← Edit shared trip' })
-    ]));
-    var list = h('div', { class: 'gt-pods' });
-    if (!g.pods.length) list.appendChild(h('div', { class: 'pkg-empty', text: 'No itineraries yet. Add the first one below.' }));
-    g.pods.forEach(function (pod, i) { list.appendChild(gtPodCard(pod, i)); });
-    body.appendChild(list);
-    body.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-top:6px', onclick: function () { g.podDraft = { label: '', title: '', pax: null, travelers: '', out_segments: [], ret_segments: [] }; g.podIndex = null; g.view = 'podedit'; renderTab(); }, text: '+ Add itinerary' }));
-    body.appendChild(h('div', { class: 'gt-generate' }, [
-      h('div', { id: 'gt-msg', class: 'msg', style: 'display:none' }),
-      h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto', onclick: function (e) { gtSaveOnly(e.target); }, text: 'Save without generating' }),
-      h('button', { type: 'button', id: 'gt-generate-btn', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', onclick: gtGenerate, text: 'Generate ' + (g.pods.length || '') + ' itinerar' + (g.pods.length === 1 ? 'y' : 'ies') })
-    ]));
-    wrap.appendChild(body); return wrap;
-  }
-  function gtPodEditView() {
-    state.gtBuilding = true;
-    var g = state.gt, pod = g.podDraft || { label: '', title: '', pax: null, travelers: '', out_segments: [], ret_segments: [] }, wrap = h('div');
-    wrap.appendChild(mainHead(g.podIndex == null ? 'New itinerary' : 'Edit itinerary', 'This itinerary has its own departure and return city. The shared trip is inserted in the middle automatically.'));
-    var body = h('div', { class: 'main-body' });
-    var sharedR = gtSharedRoute(g.shared.segments), meet = sharedR ? sharedR.split(' → ')[0] : 'the meeting point';
-    var form = h('form', { class: 'inv-form', onsubmit: function (e) { e.preventDefault(); gtSavePod(); } }, [
-      h('div', { class: 'inv-section' }, [
-        h('h3', { class: 'inv-h3', text: 'This itinerary' }),
-        h('div', { class: 'inv-row2', style: 'margin-bottom:16px' }, [invField('Starting point', 'gt-pod-label', 'text', 'e.g. Detroit', pod.label), invField('Display title (shown to the customer)', 'gt-pod-title', 'text', 'Defaults to the trip name', pod.title)]),
-        h('div', { class: 'inv-row2', style: 'margin-bottom:16px' }, [paxField('Number of travellers', 'gt-pod-pax', pod.pax != null ? pod.pax : ''), h('div')]),
-        h('label', { class: 'inv-field' }, [h('span', { text: 'Traveller names (optional)' }), h('textarea', { id: 'gt-pod-travelers', class: 'inv-input inv-textarea', rows: '2', placeholder: 'e.g.\nMr Ahmed Loya\nMrs Loya', value: pod.travelers || '' })])
-      ]),
-      h('div', { class: 'inv-section' }, [
-        h('h3', { class: 'inv-h3', text: 'Departure — getting there' }),
-        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Their flight(s) from their home city to ' + meet + ', where the group meets.' }),
-        podLegs('out', podOut(pod))
-      ]),
-      h('div', { class: 'gt-mid-note' }, [h('span', { class: 'gt-mid-line' }), h('span', { class: 'gt-mid-text', text: sharedR ? 'Everyone shares  ·  ' + sharedR : 'The shared journey goes here' }), h('span', { class: 'gt-mid-line' })]),
-      h('div', { class: 'inv-section' }, [
-        h('h3', { class: 'inv-h3', text: 'Return — heading home' }),
-        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Their flight(s) from ' + meet + ' back to their home city.' }),
-        podLegs('ret', podRet(pod))
-      ]),
-      h('div', { class: 'inv-submit' }, [
-        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:13px 24px', onclick: function () { g.view = 'pods'; g.podDraft = null; g.podIndex = null; renderTab(); }, text: 'Cancel' }),
-        h('div', { id: 'gt-pod-msg', class: 'msg', style: 'display:none' }),
-        h('button', { type: 'submit', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Save itinerary' })
-      ])
-    ]);
-    body.appendChild(form); wrap.appendChild(body);
-    setTimeout(function () { initDatePickers(form); }, 0);
-    return wrap;
-  }
-  function gtSavePod() {
-    var g = state.gt, msg = document.getElementById('gt-pod-msg');
-    var label = val('gt-pod-label'), title = val('gt-pod-title'), travelers = ((document.getElementById('gt-pod-travelers') || {}).value || '').trim();
-    var paxN = parseInt(val('gt-pod-pax'), 10); if (isNaN(paxN) || paxN < 1) paxN = null;
-    var outSegs = readLegsFrom(document.querySelector('.inv-segs[data-leg="out"]'));
-    var retSegs = readLegsFrom(document.querySelector('.inv-segs[data-leg="ret"]'));
-    if (!label) { showInvMsg(msg, 'Give this itinerary a starting point (e.g. “Detroit”).', 'err'); return; }
-    if (!outSegs.length && !retSegs.length) { showInvMsg(msg, 'Add at least their departure flight (a From and To).', 'err'); return; }
-    var pod = { label: label, title: title || null, pax: paxN, travelers: travelers, out_segments: outSegs, ret_segments: retSegs };
-    if (g.podIndex == null) g.pods.push(pod); else g.pods[g.podIndex] = pod;
-    g.podDraft = null; g.podIndex = null; g.view = 'pods'; renderTab();
-  }
   function gtOwner() {
     var g = state.gt;
     if (g.target_kind === 'account') { if (!g.customer) return null; return { customer_email: g.customer.email, account_number: g.customer.account_number || null, user_id: g.customer.id || null, group_id: null }; }
@@ -3132,10 +3106,11 @@
     return r.data.id;
   }
   async function gtSaveOnly(btn) {
+    gtCollectAll();
     var g = state.gt, owner = gtOwner();
     if (!owner) { var m = document.getElementById('gt-msg'); if (m) showInvMsg(m, g.target_kind === 'account' ? 'Pick the shared account first.' : 'Pick or create a linked group first.', 'err'); return; }
     btn.disabled = true; btn.textContent = 'Saving…';
-    try { await gtPersist(owner); } catch (e) { btn.disabled = false; btn.textContent = 'Save without generating'; var m2 = document.getElementById('gt-msg'); if (m2) showInvMsg(m2, 'Could not save the group trip.', 'err'); return; }
+    try { await gtPersist(owner); } catch (e) { btn.disabled = false; btn.textContent = 'Save for later'; var m2 = document.getElementById('gt-msg'); if (m2) showInvMsg(m2, 'Could not save the group trip.', 'err'); return; }
     state.gt = gtBlank(); state.gtFlash = { kind: 'note', text: 'Group trip saved. You can open it any time to generate the itineraries.' }; renderTab();
   }
   function gtSplitPod(podSegs, hub) {
@@ -3152,17 +3127,21 @@
     return { start: ds[0] || null, end: last ? (admArriveDate(last) || last.depart_date || null) : null };
   }
   async function gtGenerate() {
+    gtCollectAll();
     var g = state.gt, msg = document.getElementById('gt-msg');
     function err(m) { if (msg) showInvMsg(msg, m, 'err'); }
     var owner = gtOwner();
     if (!owner) { err(g.target_kind === 'account' ? 'Pick the shared account first.' : 'Pick or create a linked group first.'); return; }
     if (g.target_kind === 'group' && !((g.group.travel_group_members || []).length)) { err('Add at least one member to the linked group.'); return; }
-    if (!g.pods.length) { err('Add at least one city group first.'); return; }
+    var s = g.shared;
+    if (!(s.segments && s.segments.length) && !(s.hotels && s.hotels.length) && !(s.transport && s.transport.length) && !(s.entertainment && s.entertainment.length)) { err('Build the shared trip first — add at least one shared flight, hotel, transfer or experience.'); return; }
+    var filled = g.pods.filter(function (p) { return (p.label || '').trim() || podOut(p).length || podRet(p).length; });
+    if (!filled.length) { err('Fill in at least one itinerary (a starting point and its flights).'); return; }
     var btn = document.getElementById('gt-generate-btn'); if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
     var gtId; try { gtId = await gtPersist(owner); } catch (e) { gtId = null; }
     if (!gtId) { if (btn) { btn.disabled = false; btn.textContent = 'Generate itineraries'; } err('Could not save the group trip.'); return; }
     try { await sb.from('itineraries').delete().eq('group_trip_id', gtId); } catch (e) { }
-    var rows = g.pods.map(function (pod) {
+    var rows = filled.map(function (pod) {
       var composed = podOut(pod).concat(g.shared.segments || [], podRet(pod));
       var dates = gtComposedDates(composed), pax = gtPodPax(pod);
       return {
