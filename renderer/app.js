@@ -2972,8 +2972,14 @@
           : h('div', { style: 'margin-top:12px' }, [h('p', { class: 'inv-sublabel', style: 'margin-bottom:8px', text: 'Each traveller keeps their own login; the group links them so everyone sees every itinerary.' }), gtGroupControl()])
       ]),
       h('div', { class: 'inv-section' }, [
+        h('div', { class: 'gt-count-head' }, [
+          h('div', null, [h('h3', { class: 'inv-h3', style: 'margin:0', text: 'Itineraries' }), h('p', { class: 'inv-sublabel', style: 'margin:4px 0 0', text: 'One per starting point (e.g. Detroit, Chicago). Choose how many — you fill each one in below the shared trip.' })]),
+          h('div', { class: 'gt-count-pick' }, [h('span', { class: 'gt-count-lbl', text: 'How many?' }), gtCountStepper(n)])
+        ])
+      ]),
+      h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'The shared trip' }),
-        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 6px', text: 'Built once and added to every itinerary below: the flights from the meeting point onward, plus every hotel, transfer, meal and experience they do together.' }),
+        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 6px', text: 'Built once and added to every itinerary: the flights from the meeting point onward, plus every hotel, transfer, meal and experience they do together.' }),
         templateBar(),
         h('div', { class: 'gt-subsec' }, [h('h3', { class: 'gt-subsec-h', text: 'Flights — from the meeting point onward' }), flightsSection(segs, null, { plain: true })]),
         itinSection('Hotels', 'itin-hotels', (g.shared.hotels || []).map(hotelCard), '+ Add hotel', function () { var c = hotelCard(); document.getElementById('itin-hotels').appendChild(c); initDatePickers(c); }, true),
@@ -2982,10 +2988,8 @@
         itinSection('Experiences', 'itin-ent', (g.shared.entertainment || []).filter(function (x) { return x.kind !== 'dining'; }).map(entCard), '+ Add experience', function () { var c = entCard(); document.getElementById('itin-ent').appendChild(c); initDatePickers(c); }, true)
       ]),
       h('div', { class: 'inv-section' }, [
-        h('div', { class: 'gt-count-head' }, [
-          h('div', null, [h('h3', { class: 'inv-h3', style: 'margin:0', text: 'Itineraries' }), h('p', { class: 'inv-sublabel', style: 'margin:4px 0 0', text: 'One per starting point. Each has its own travellers, title and flights to and from home.' })]),
-          h('div', { class: 'gt-count-pick' }, [h('span', { class: 'gt-count-lbl', text: 'How many?' }), gtCountStepper(n)])
-        ]),
+        h('h3', { class: 'inv-h3', text: 'Fill in each itinerary' }),
+        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Each starting point’s travellers, title and its own flights to and from home. The shared trip above is added to every one.' }),
         h('div', { class: 'gt-itins' }, g.pods.map(gtItinCard))
       ]),
       h('div', { class: 'inv-section' }, [
