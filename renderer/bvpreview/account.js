@@ -599,19 +599,30 @@
             rootEl.insertBefore(wrapEl, el);
             wrapEl.appendChild(el);
           });
-          var dims = (opt.jsPDF.format === 'letter') ? [215.9, 279.4] : [210, 297];
-          var wPx = rootEl.getBoundingClientRect().width || rootEl.offsetWidth;
-          if (wPx > 0) {
-            var pxPerMm = wPx / dims[0], pageHpx = dims[1] * pxPerMm;
-            var pagesN = Math.max(1, Math.ceil(rootEl.scrollHeight / pageHpx));
-            rootEl.style.minHeight = Math.ceil(pagesN * pageHpx) + 'px';
-          }
         } catch (e) { }
       }
+      /* the canvas html2pdf actually rendered (page-break spacers included) tells us exactly
+         where content ends on the last page, so the remainder gets painted paper, not white */
+      var cvW = 0, cvH = 0;
+      var fillLastPage = function (pdf) {
+        if (!pdfOpt.fill || !(cvW > 0)) return pdf;
+        try {
+          var pn = pdf.internal.getNumberOfPages(), pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+          var totalMm = cvH * (pw / cvW);
+          var lastMm = totalMm - (pn - 1) * ph;
+          if (lastMm > 0 && lastMm < ph - 0.5) {
+            pdf.setPage(pn);
+            pdf.setFillColor(244, 237, 223); /* after setPage: jsPDF fill color is per-page */
+            pdf.rect(0, Math.max(0, lastMm - 0.4), pw, ph - lastMm + 0.6, 'F');
+          }
+        } catch (e) { }
+        return pdf;
+      };
       /* wait for the serif webfont so the PDF embeds it, not a fallback; then render once */
       var ready = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
       ready.then(function () {
-        window.html2pdf().set(opt).from(page.firstChild).toPdf().get('pdf').then(function (pdf) {
+        window.html2pdf().set(opt).from(page.firstChild).toCanvas().get('canvas').then(function (cv) { if (cv) { cvW = cv.width; cvH = cv.height; } }).toPdf().get('pdf').then(function (pdf) {
+          fillLastPage(pdf);
           stampPages(pdf);
           if (mode === 'open') { var url = pdf.output('bloburl'); if (win) win.location.href = url; else window.open(url, '_blank'); }
           else { pdf.save(opt.filename); }
@@ -838,7 +849,7 @@
   }
   function ldFooter(num) {
     return h('footer', { class: 'ld-footer' }, [
-      h('div', null, [h('div', { class: 'ld-footer-name', text: agencyName() }), (state.settings && state.settings.agency_tagline) ? h('div', { class: 'ld-footer-tag', text: state.settings.agency_tagline }) : null]),
+      h('div', null, [h('div', { class: 'ld-footer-brand' }, [h('span', { class: 'ld-mark' }), h('span', { class: 'ld-footer-name', text: agencyName() })]), (state.settings && state.settings.agency_tagline) ? h('div', { class: 'ld-footer-tag', text: state.settings.agency_tagline }) : null]),
       h('div', { class: 'ld-footer-tag', text: [(state.settings && state.settings.agency_phone) || '', num || ''].filter(Boolean).join('   ·   ') })
     ]);
   }
@@ -888,6 +899,7 @@
       ['Cabin', (it.segments && it.segments[0] && it.segments[0].cabin) || ''],
       ['Itinerary', it.itinerary_number ? 'No. ' + it.itinerary_number : '']
     ]));
+    if (it.destination && it.destination !== it.title) doc.appendChild(h('p', { class: 'ld-dest', text: it.destination }));
     if (it.traveler_names) doc.appendChild(h('p', { class: 'ld-party', text: 'Traveling party: ' + travelerList(it.traveler_names).join(', ') }));
     var no = 0;
     ldEvents(it).forEach(function (ev) {

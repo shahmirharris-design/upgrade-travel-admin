@@ -1724,7 +1724,7 @@ html.acct-modal-open, body.acct-modal-open{ overflow:hidden; }
 .ld-h1{ font-family:'Cormorant Garamond',Georgia,serif; font-weight:500; font-size:64px; line-height:1.02; margin:14px 0 0; letter-spacing:-.01em; }
 .ld-rule{ width:64px; height:2px; background:#A9854C; margin:24px 0 0; }
 .ld-prepared{ font-family:'Cormorant Garamond',Georgia,serif; font-style:italic; font-size:20px; color:#5A5142; margin:20px 0 0; }
-.ld-banner{ position:relative; margin-top:40px; border-radius:14px; overflow:hidden; height:300px; break-inside:avoid; background:linear-gradient(120deg,#241C12 0%, #2E2418 45%, #3A2E1D 100%); }
+.ld-banner{ position:relative; margin-top:40px; border-radius:14px; overflow:hidden; height:330px; break-inside:avoid; background:linear-gradient(120deg,#241C12 0%, #2E2418 45%, #3A2E1D 100%); }
 .ld-banner-img{ position:absolute; inset:0; background-size:cover; background-position:center; }
 .ld-banner-img.bv-has-img{ filter:saturate(1.24) contrast(1.07) brightness(1.03); }
 .ld-banner::after{ content:""; position:absolute; inset:0; background:linear-gradient(to top, rgba(20,13,7,.66), rgba(20,13,7,.12) 52%, rgba(20,13,7,.02)); }
@@ -1990,3 +1990,8 @@ p, .ld-prose, .bv-day-text, .quote-note{ text-wrap: pretty; }
 .ld-fl-line svg{ position:absolute; right:-3px; top:-7px; color:#A9854C; }
 .ld-fl-no{ font-size:11.5px; color:#7C7155; }
 .ld-fl-arr{ text-align:right; }
+
+/* cover destination line + footer brand mark + slightly grander banners */
+.ld-dest{ margin:14px 0 0; font-family:'Cormorant Garamond',Georgia,serif; font-style:italic; font-size:21px; color:#7A5E29; }
+.ld-footer-brand{ display:flex; align-items:center; gap:10px; }
+.ld-footer .ld-mark, .ld-footer-brand .ld-mark{ width:9px; height:9px; }
