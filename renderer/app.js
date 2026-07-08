@@ -2919,8 +2919,7 @@
   }
   function gtCollectSetup() {
     var g = state.gt; if (!g) return;
-    g.name = val('gt-name'); g.title = val('gt-title'); g.destination = val('gt-dest');
-    g.start_date = val('gt-start') || null; g.end_date = val('gt-end') || null;
+    g.name = val('gt-name');
     g.total_charged = parseFloat(val('itin-total')) || null; g.comparable_total = parseFloat(val('itin-comp')) || null;
     g.currency = val('itin-cur') || g.currency || 'USD'; g.price_invoice_number = val('itin-pull-inv') || null;
     g.notes = val('gt-notes');
@@ -2928,12 +2927,19 @@
       /* firstCanConnect: the first shared flight (e.g. Istanbul -> Destination 1) may be marked a
          connection, because after generation it follows each group's arrival into the meeting city */
       g.shared = { segments: readLegsFrom(document.getElementById('inv-segs'), true), trip_type: readTripType(), hotels: readCards('itin-hotels', 'hotel'), transport: readCards('itin-transport', 'transport'), entertainment: readCards('itin-dining', 'dining').concat(readCards('itin-ent', 'ent')) };
+      g.destination = gtDeriveDest(g.shared.segments); /* auto from the shared flights, no field to fill */
     }
+  }
+  /* the trip's destinations = the shared journey's stop cities, excluding the meeting/hub city */
+  function gtDeriveDest(segs) {
+    segs = segs || []; var hub = segs[0] && segs[0].from && segs[0].from.code, seen = {}, cities = [];
+    segs.forEach(function (s) { var t = s && s.to; if (t && t.code && t.code !== hub && t.city && !seen[t.code]) { seen[t.code] = 1; cities.push(t.city); } });
+    return cities.slice(0, 3).join(' & ') || null;
   }
   function gtSetupView() {
     state.gtBuilding = true;
     var g = state.gt, wrap = h('div');
-    wrap.appendChild(mainHead(g.editing_id ? 'Edit group trip' : 'New group trip', 'Build the shared journey once. Next, add each city group and we generate an itinerary for each.'));
+    wrap.appendChild(mainHead(g.editing_id ? 'Edit group trip' : 'New group trip', 'Build the shared trip once. Next, add one itinerary per departure city — we combine them automatically.'));
     var body = h('div', { class: 'main-body' });
     if (state.gtFlash) { body.appendChild(flashEl(state.gtFlash, false)); state.gtFlash = null; }
     body.appendChild(gtItinBanner());
@@ -2947,21 +2953,21 @@
           : h('div', { style: 'margin-top:14px' }, [h('p', { class: 'inv-sublabel', style: 'margin-bottom:8px', text: 'Each traveller keeps their own login; the group links them so everyone sees every itinerary.' }), gtGroupControl()])
       ]),
       h('div', { class: 'inv-section' }, [
-        h('h3', { class: 'inv-h3', text: 'Trip' }),
-        h('div', { class: 'inv-row2', style: 'margin-bottom:16px' }, [invField('Trip name (for your list)', 'gt-name', 'text', 'e.g. Loya Family, Turkiye', g.name), invField('Display title (shown to customer)', 'gt-title', 'text', 'e.g. Turkiye Together', g.title)]),
-        cityField('Destination', '', g.destination, 'Start typing a city…', 'gt-dest'),
-        h('div', { class: 'inv-row2' }, [invField('Trip starts', 'gt-start', 'date', '', g.start_date), invField('Trip ends', 'gt-end', 'date', '', g.end_date)])
+        h('h3', { class: 'inv-h3', text: 'Trip name' }),
+        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 12px', text: 'Just a name for your own list. The dates and destination fill in automatically from the flights, and each traveller group gets its own title in the next step.' }),
+        invField('Trip name (for your list)', 'gt-name', 'text', 'e.g. Loya Family — Croatia & Dubai', g.name)
       ]),
       h('div', { class: 'inv-section' }, [
-        h('h3', { class: 'inv-h3', text: 'Shared journey: what everyone does together' }),
-        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'The flights everyone takes together, in order, from where they meet (like the layover city) to the end of the shared trip. Add hotels and the rest below. Each city group adds its own flights home in the next step.' }),
+        h('h3', { class: 'inv-h3', text: 'The shared trip — everything everyone does together' }),
+        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Built once, applied to every traveller: the shared flights (from the meeting point onward), plus all the hotels, transfers, dining and experiences below. Each traveller group adds only its own flights to and from home in the next step.' }),
         templateBar(),
+        h('p', { class: 'gt-sub-label', text: 'Shared flights (from the meeting point onward)' }),
         flightsSection(segs, null, { plain: true })
       ]),
-      itinSection('Hotels', 'itin-hotels', (g.shared.hotels || []).map(hotelCard), '+ Add hotel', function () { var c = hotelCard(); document.getElementById('itin-hotels').appendChild(c); initDatePickers(c); }),
-      itinSection('Transportation', 'itin-transport', (g.shared.transport || []).map(transportCard), '+ Add transport', function () { var c = transportCard(); document.getElementById('itin-transport').appendChild(c); initDatePickers(c); }),
-      itinSection('Dining', 'itin-dining', (g.shared.entertainment || []).filter(function (x) { return x.kind === 'dining'; }).map(diningCard), '+ Add dining', function () { var c = diningCard(); document.getElementById('itin-dining').appendChild(c); initDatePickers(c); }),
-      itinSection('Entertainment', 'itin-ent', (g.shared.entertainment || []).filter(function (x) { return x.kind !== 'dining'; }).map(entCard), '+ Add experience', function () { var c = entCard(); document.getElementById('itin-ent').appendChild(c); initDatePickers(c); }),
+      itinSection('Shared hotels', 'itin-hotels', (g.shared.hotels || []).map(hotelCard), '+ Add hotel', function () { var c = hotelCard(); document.getElementById('itin-hotels').appendChild(c); initDatePickers(c); }),
+      itinSection('Shared transfers', 'itin-transport', (g.shared.transport || []).map(transportCard), '+ Add transport', function () { var c = transportCard(); document.getElementById('itin-transport').appendChild(c); initDatePickers(c); }),
+      itinSection('Shared dining', 'itin-dining', (g.shared.entertainment || []).filter(function (x) { return x.kind === 'dining'; }).map(diningCard), '+ Add dining', function () { var c = diningCard(); document.getElementById('itin-dining').appendChild(c); initDatePickers(c); }),
+      itinSection('Shared experiences', 'itin-ent', (g.shared.entertainment || []).filter(function (x) { return x.kind !== 'dining'; }).map(entCard), '+ Add experience', function () { var c = entCard(); document.getElementById('itin-ent').appendChild(c); initDatePickers(c); }),
       h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'Pricing & savings (optional)' }),
         h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Applied to each generated itinerary. Pull from an invoice or type it in.' }),
@@ -2976,7 +2982,7 @@
       h('div', { class: 'inv-submit' }, [
         h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:13px 24px', onclick: function () { state.gt = gtBlank(); renderTab(); }, text: 'Cancel' }),
         h('div', { id: 'gt-msg', class: 'msg', style: 'display:none' }),
-        h('button', { type: 'submit', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Continue to city groups →' })
+        h('button', { type: 'submit', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Continue to itineraries →' })
       ])
     ]);
     body.appendChild(form); wrap.appendChild(body);
@@ -2986,7 +2992,7 @@
   function gtItinBanner() {
     return h('div', { class: 'gt-banner' }, [
       h('span', { class: 'gt-banner-tag', text: 'Itinerary' }),
-      h('span', { class: 'gt-banner-text', text: 'Each city group becomes its own full itinerary (flights, hotels, everything) in the family’s account.' })
+      h('span', { class: 'gt-banner-text', text: 'One trip, several itineraries. Build the shared part once; each departure city becomes its own full itinerary in the account.' })
     ]);
   }
   function gtContinueToPods() {
@@ -3026,7 +3032,7 @@
     var routes = [outR ? 'Out  ' + outR : '', retR ? 'Home  ' + retR : ''].filter(Boolean).join('      ·      ') || 'No flights yet';
     return h('div', { class: 'pkg-card' }, [
       h('div', { class: 'pkg-card-main' }, [
-        h('div', { class: 'pkg-card-name', text: pod.label || ('City group ' + (i + 1)) }),
+        h('div', { class: 'pkg-card-name', text: pod.label || pod.title || ('Itinerary ' + (i + 1)) }),
         h('div', { class: 'pkg-card-sub', text: routes }),
         pod.travelers ? h('div', { class: 'gt-pod-travelers', text: pax + ' traveller' + (pax > 1 ? 's' : '') + ': ' + pod.travelers.split(/[\n,]+/).map(function (x) { return x.trim(); }).filter(Boolean).join(', ') }) : null
       ]),
@@ -3039,22 +3045,22 @@
   function gtEditPod(i) { var g = state.gt; g.podDraft = JSON.parse(JSON.stringify(g.pods[i])); g.podIndex = i; g.view = 'podedit'; renderTab(); }
   function gtPodsView() {
     var g = state.gt, wrap = h('div');
-    wrap.appendChild(mainHead('City groups', 'Add each departure/return city. We generate one itinerary per group — shared journey in the middle, their own flights on the ends.'));
+    wrap.appendChild(mainHead('Itineraries', 'Add one itinerary per departure city. Each is that city’s flights to and from home; the shared trip is inserted in the middle automatically.'));
     var body = h('div', { class: 'main-body' });
     if (state.gtFlash) { body.appendChild(flashEl(state.gtFlash, false)); state.gtFlash = null; }
     body.appendChild(gtItinBanner());
     body.appendChild(h('div', { class: 'gt-summary' }, [
       h('div', { class: 'gt-summary-main' }, [
-        h('div', { class: 'gt-summary-title', text: (g.title || g.name || 'Group trip') + (g.destination ? ' · ' + g.destination : '') }),
+        h('div', { class: 'gt-summary-title', text: (g.name || 'Group trip') + (g.destination ? ' · ' + g.destination : '') }),
         h('div', { class: 'gt-summary-sub', text: [(g.target_kind === 'account' ? ('Shared account: ' + (g.customer ? fullName(g.customer) : '—')) : ('Linked group: ' + (g.group ? g.group.name : '—'))), 'Shared: ' + (gtSharedRoute(g.shared.segments) || 'no flights') + gtSharedExtras(g.shared)].join('  ·  ') })
       ]),
       h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto', onclick: function () { g.view = 'setup'; renderTab(); }, text: '← Edit shared trip' })
     ]));
     var list = h('div', { class: 'gt-pods' });
-    if (!g.pods.length) list.appendChild(h('div', { class: 'pkg-empty', text: 'No city groups yet. Add the first one below.' }));
+    if (!g.pods.length) list.appendChild(h('div', { class: 'pkg-empty', text: 'No itineraries yet. Add the first one below.' }));
     g.pods.forEach(function (pod, i) { list.appendChild(gtPodCard(pod, i)); });
     body.appendChild(list);
-    body.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-top:6px', onclick: function () { g.podDraft = { label: '', title: '', travelers: '', out_segments: [], ret_segments: [] }; g.podIndex = null; g.view = 'podedit'; renderTab(); }, text: '+ Add city group' }));
+    body.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-top:6px', onclick: function () { g.podDraft = { label: '', title: '', travelers: '', out_segments: [], ret_segments: [] }; g.podIndex = null; g.view = 'podedit'; renderTab(); }, text: '+ Add itinerary' }));
     body.appendChild(h('div', { class: 'gt-generate' }, [
       h('div', { id: 'gt-msg', class: 'msg', style: 'display:none' }),
       h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto', onclick: function (e) { gtSaveOnly(e.target); }, text: 'Save without generating' }),
@@ -3065,13 +3071,13 @@
   function gtPodEditView() {
     state.gtBuilding = true;
     var g = state.gt, pod = g.podDraft || { label: '', title: '', travelers: '', out_segments: [], ret_segments: [] }, wrap = h('div');
-    wrap.appendChild(mainHead(g.podIndex == null ? 'New city group' : 'Edit city group', 'This group has its own departure and return city. The shared journey is inserted in the middle automatically.'));
+    wrap.appendChild(mainHead(g.podIndex == null ? 'New itinerary' : 'Edit itinerary', 'This itinerary has its own departure and return city. The shared trip is inserted in the middle automatically.'));
     var body = h('div', { class: 'main-body' });
     var sharedR = gtSharedRoute(g.shared.segments), meet = sharedR ? sharedR.split(' → ')[0] : 'the meeting point';
     var form = h('form', { class: 'inv-form', onsubmit: function (e) { e.preventDefault(); gtSavePod(); } }, [
       h('div', { class: 'inv-section' }, [
-        h('h3', { class: 'inv-h3', text: 'City group' }),
-        h('div', { class: 'inv-row2', style: 'margin-bottom:16px' }, [invField('Label (for your list)', 'gt-pod-label', 'text', 'e.g. Houston travelers', pod.label), invField('Itinerary title (optional)', 'gt-pod-title', 'text', 'Defaults to the trip title', pod.title)]),
+        h('h3', { class: 'inv-h3', text: 'This itinerary' }),
+        h('div', { class: 'inv-row2', style: 'margin-bottom:16px' }, [invField('Label (for your list)', 'gt-pod-label', 'text', 'e.g. Houston travelers', pod.label), invField('Display title (shown to the customer)', 'gt-pod-title', 'text', 'Defaults to the trip name', pod.title)]),
         h('label', { class: 'inv-field' }, [h('span', { text: 'Travellers (one per line, or comma-separated)' }), h('textarea', { id: 'gt-pod-travelers', class: 'inv-input inv-textarea', rows: '3', placeholder: 'e.g.\nMr Ahmed Loya\nMrs Loya', value: pod.travelers || '' })])
       ]),
       h('div', { class: 'inv-section' }, [
@@ -3088,7 +3094,7 @@
       h('div', { class: 'inv-submit' }, [
         h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:13px 24px', onclick: function () { g.view = 'pods'; g.podDraft = null; g.podIndex = null; renderTab(); }, text: 'Cancel' }),
         h('div', { id: 'gt-pod-msg', class: 'msg', style: 'display:none' }),
-        h('button', { type: 'submit', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Save city group' })
+        h('button', { type: 'submit', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Save itinerary' })
       ])
     ]);
     body.appendChild(form); wrap.appendChild(body);
@@ -3100,7 +3106,7 @@
     var label = val('gt-pod-label'), title = val('gt-pod-title'), travelers = ((document.getElementById('gt-pod-travelers') || {}).value || '').trim();
     var outSegs = readLegsFrom(document.querySelector('.inv-segs[data-leg="out"]'));
     var retSegs = readLegsFrom(document.querySelector('.inv-segs[data-leg="ret"]'));
-    if (!label) { showInvMsg(msg, 'Give this city group a label (e.g. “Houston travelers”).', 'err'); return; }
+    if (!label) { showInvMsg(msg, 'Give this itinerary a label (e.g. “Houston travelers”).', 'err'); return; }
     if (!outSegs.length && !retSegs.length) { showInvMsg(msg, 'Add at least their departure flight (a From and To).', 'err'); return; }
     var pod = { label: label, title: title || null, travelers: travelers, out_segments: outSegs, ret_segments: retSegs };
     if (g.podIndex == null) g.pods.push(pod); else g.pods[g.podIndex] = pod;
@@ -3115,7 +3121,7 @@
   }
   async function gtPersist(owner) {
     var g = state.gt;
-    var payload = { name: g.name || g.title || 'Group trip', target_kind: g.target_kind, customer_email: owner.customer_email || null, account_number: owner.account_number, user_id: owner.user_id, group_id: owner.group_id, title: g.title || null, destination: g.destination || null, start_date: g.start_date || null, end_date: g.end_date || null, currency: g.currency || 'USD', total_charged: g.total_charged, comparable_total: g.comparable_total, notes: g.notes || null, shared: g.shared || {}, pods: g.pods || [], city_images: (g.city_images && Object.keys(g.city_images).length) ? g.city_images : null };
+    var payload = { name: g.name || 'Group trip', target_kind: g.target_kind, customer_email: owner.customer_email || null, account_number: owner.account_number, user_id: owner.user_id, group_id: owner.group_id, title: null, destination: g.destination || null, start_date: g.start_date || null, end_date: g.end_date || null, currency: g.currency || 'USD', total_charged: g.total_charged, comparable_total: g.comparable_total, notes: g.notes || null, shared: g.shared || {}, pods: g.pods || [], city_images: (g.city_images && Object.keys(g.city_images).length) ? g.city_images : null };
     var r;
     if (g.editing_id) r = await sb.from('group_trips').update(payload).eq('id', g.editing_id).select('id').maybeSingle();
     else r = await sb.from('group_trips').insert(payload).select('id').maybeSingle();
@@ -3160,8 +3166,8 @@
       return {
         customer_email: owner.customer_email, account_number: owner.account_number, user_id: owner.user_id,
         group_id: owner.group_id, group_trip_id: gtId, traveler_names: pod.travelers || null,
-        title: (pod.title || (g.title ? g.title + ' · ' + pod.label : pod.label)), destination: g.destination || null, trip_type: 'multi',
-        start_date: g.start_date || dates.start, end_date: g.end_date || dates.end,
+        title: (pod.title || g.name || pod.label), destination: g.destination || null, trip_type: 'multi',
+        start_date: dates.start, end_date: dates.end,
         passengers: pax, pax_adults: pax, pax_children: 0, pax_infants: 0,
         segments: composed, hotels: g.shared.hotels || [], transport: g.shared.transport || [], entertainment: g.shared.entertainment || [],
         notes: g.notes || null, total_charged: g.total_charged, comparable_total: g.comparable_total, currency: g.currency || 'USD',
@@ -3195,7 +3201,7 @@
   }
   function gtTripRow(row) {
     var pods = (row.pods || []);
-    var sub = [row.destination, (pods.length + ' city group' + (pods.length !== 1 ? 's' : '')), (row.target_kind === 'group' ? 'Linked group' : 'Shared account'), row.created_at ? ('Created ' + fmtDate(row.created_at)) : ''].filter(Boolean).join('  ·  ');
+    var sub = [row.destination, (pods.length + ' itinerar' + (pods.length === 1 ? 'y' : 'ies')), (row.target_kind === 'group' ? 'Linked group' : 'Shared account'), row.created_at ? ('Created ' + fmtDate(row.created_at)) : ''].filter(Boolean).join('  ·  ');
     return h('div', { class: 'pkg-card' }, [
       h('div', { class: 'pkg-card-main' }, [h('div', { class: 'pkg-card-name', text: row.name || row.title || 'Group trip' }), h('div', { class: 'pkg-card-sub', text: sub })]),
       h('div', { class: 'pkg-card-actions' }, [
