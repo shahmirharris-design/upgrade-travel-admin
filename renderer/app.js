@@ -661,7 +661,7 @@
     _rtChannel = sb.channel('profiles-live')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'profiles' }, function (p) { upsertCustomer(p.new); })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, function (p) { upsertCustomer(p.new); })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'quote_requests' }, function () { if (state.tab === 'quotes' && state.docView === 'form') loadRequests(); else if (state.tab === 'dashboard') loadDashboard(); });
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'quote_requests' }, function () { if (state.tab === 'quotes' && state.docView === 'requests') loadRequests(); else if (state.tab === 'quotes' && state.docView === 'form') loadReqBarCount(); else if (state.tab === 'dashboard') loadDashboard(); });
     _rtChannel.subscribe();
   }
   /* remove the live channel and clear the guard so the next sign-in re-subscribes cleanly. Idempotent. */
@@ -1500,10 +1500,24 @@
       var body = wrap.querySelector('.main-body');
       if (body) {
         body.insertBefore(docListBar('quote'), body.firstChild);
-        var box = h('div', { id: 'qreq-box' }); body.insertBefore(box, body.firstChild); setTimeout(loadRequests, 0);
+        body.insertBefore(reqListBar(), body.firstChild);
       }
     }
     return wrap;
+  }
+  function reqListBar() {
+    var bar = h('div', { class: 'sent-bar' }, [
+      h('div', { class: 'sent-bar-main' }, [h('span', { class: 'sent-bar-label', text: 'Incoming requests' }), h('span', { class: 'sent-bar-count', id: 'req-bar-count', text: '' })]),
+      h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto', onclick: function () { state.docView = 'requests'; renderTab(); }, text: 'View all' })
+    ]);
+    setTimeout(loadReqBarCount, 0);
+    return bar;
+  }
+  async function loadReqBarCount() {
+    var el = document.getElementById('req-bar-count'); if (!el) return;
+    var r = await sb.from('quote_requests').select('id', { count: 'exact', head: true }).eq('status', 'new');
+    el = document.getElementById('req-bar-count'); if (!el) return;
+    el.textContent = (r.count != null ? r.count : 0);
   }
   function findCustomerForDoc(q) {
     var c = null, em = (q.customer_email || '').toLowerCase();
@@ -1668,8 +1682,8 @@
     var r = await sb.from('quote_requests').select('*').eq('status', 'new').order('created_at', { ascending: false });
     box = document.getElementById('qreq-box'); if (!box) return;
     var reqs = r.data || []; box.textContent = '';
-    if (!reqs.length) return;
-    box.appendChild(h('div', { class: 'qreq-wrap' }, [h('h3', { class: 'qreq-h', text: 'Incoming requests · ' + reqs.length })].concat(reqs.map(reqCard))));
+    if (!reqs.length) { box.appendChild(h('div', { class: 'pkg-empty', text: 'No incoming requests right now.' })); return; }
+    box.appendChild(h('div', { class: 'qreq-wrap' }, reqs.map(reqCard)));
   }
   function reqCard(req) {
     var pax = (req.adults || 0) + (req.children || 0) + (req.infants || 0), bits = [];
@@ -1945,6 +1959,13 @@
   function tabDoc() {
     var c = dcfg(), wrap = h('div');
     if (state.docView === 'review' && state.docDraft) { wrap.appendChild(mainHead(c.reviewTitle, 'Check everything, then send it to the customer.')); wrap.appendChild(h('div', { class: 'main-body' }, [reviewDoc(state.docDraft)])); return wrap; }
+    if (state.docView === 'requests') {
+      wrap.appendChild(mainHead('Incoming requests', 'Quote requests from the website, waiting to be built.'));
+      var rb = h('div', { class: 'main-body' });
+      rb.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-bottom:18px', onclick: function () { state.docView = 'form'; renderTab(); }, text: '← Back to quotes' }));
+      rb.appendChild(h('div', { id: 'qreq-box' }, [h('div', { class: 'dash-loading', text: 'Loading requests…' })]));
+      wrap.appendChild(rb); setTimeout(loadRequests, 0); return wrap;
+    }
     if (state.docView === 'list') {
       var isInv = c.head === 'INVOICE';
       wrap.appendChild(mainHead(isInv ? 'Invoices' : 'Quotes', isInv ? 'View or edit any invoice you’ve sent.' : 'View or edit any quote you’ve sent.'));
