@@ -1094,6 +1094,47 @@
     box.addEventListener('click', function () { input.focus(); });
     return h('label', { class: 'inv-field seg-seats-wrap' }, [h('span', { text: 'Seats' }), box]);
   }
+  /* structured baggage: rows of Type (dropdown) + Qty + Weight + Unit (kg/lb). Stores an array. */
+  var BAG_TYPES = ['Carry-on', 'Personal item', 'Checked bag', 'Extra checked bag', 'Sports equipment', 'Oversized item'];
+  var BAG_UNITS = ['kg', 'lb'];
+  function bagList(v) { return Array.isArray(v) ? v.filter(function (b) { return b && (b.type || b.weight != null); }) : []; }
+  function baggageBuilder(value) {
+    var rows = h('div', { class: 'bag-rows' });
+    function addRow(item) {
+      item = item || {};
+      var rm = h('button', { type: 'button', class: 'bag-rm', title: 'Remove', text: '×' });
+      var row = h('div', { class: 'bag-row' }, [
+        h('div', { class: 'bag-c bag-type' }, [styledSelect(null, item.type || 'Checked bag', BAG_TYPES, null)]),
+        h('div', { class: 'bag-c bag-qty' }, [h('input', { class: 'inv-input', type: 'number', min: '1', step: '1', value: item.qty != null ? item.qty : 1 })]),
+        h('div', { class: 'bag-c bag-wt' }, [h('input', { class: 'inv-input', type: 'number', min: '0', step: '1', placeholder: 'Weight', value: item.weight != null ? item.weight : '' })]),
+        h('div', { class: 'bag-c bag-unit' }, [styledSelect(null, item.unit || 'kg', BAG_UNITS, null)]),
+        rm
+      ]);
+      rm.addEventListener('click', function () { row.remove(); });
+      rows.appendChild(row);
+    }
+    bagList(value).forEach(addRow);
+    return h('div', { class: 'inv-field bag-wrap' }, [
+      h('span', { text: 'Baggage allowance' }),
+      h('div', { class: 'bag-head' }, [h('span', { text: 'Type' }), h('span', { text: 'Qty' }), h('span', { text: 'Weight' }), h('span', { text: 'Unit' }), h('span')]),
+      rows,
+      h('button', { type: 'button', class: 'inv-addline bag-add', onclick: function () { addRow(); }, text: '+ Add baggage' })
+    ]);
+  }
+  function readBaggage(card) {
+    var out = [];
+    Array.prototype.forEach.call(card.querySelectorAll('.bag-wrap .bag-row'), function (row) {
+      var type = (row.querySelector('.bag-type .ss input[type=hidden]') || {}).value || '';
+      var qty = parseInt((row.querySelector('.bag-qty input') || {}).value, 10); if (isNaN(qty) || qty < 1) qty = 1;
+      var wt = parseFloat((row.querySelector('.bag-wt input') || {}).value);
+      var unit = (row.querySelector('.bag-unit .ss input[type=hidden]') || {}).value || 'kg';
+      if (!type && isNaN(wt)) return;
+      var b = { type: type || 'Checked bag', qty: qty, unit: unit };
+      if (!isNaN(wt)) b.weight = wt;
+      out.push(b);
+    });
+    return out;
+  }
   function segRow(seg) {
     var cabinVal = (seg && seg.cabin) || (state.settings && state.settings.default_cabin) || 'Business Class';
     var rich = state.builderTab === 'itinerary' || state.pkgBuilding || state.gtBuilding;
@@ -1146,7 +1187,7 @@
           richField('Arr. terminal', 'seg-arrterm', seg && seg.arr_terminal, 'e.g. 2'),
           seatChips(seg && seg.seats)
         ]),
-        richField('Baggage allowance', 'seg-bag', seg && seg.baggage, 'e.g. 2 × 32 kg + carry-on'),
+        baggageBuilder(seg && seg.baggage),
         richField('Flight notes (optional)', 'seg-notes', seg && seg.notes, 'Specific to this flight')
       ]) : null
     ]);
@@ -1281,7 +1322,8 @@
     var seats = Array.prototype.map.call(card.querySelectorAll('.seg-seats-wrap .seat-chip'), function (el) { return el.getAttribute('data-seat'); });
     var pendSeat = ((card.querySelector('.seg-seats-wrap .seat-input') || {}).value || '').trim(); if (pendSeat) seats.push(pendSeat.toUpperCase());
     if (seats.length) seg.seats = seats;
-    pick('.seg-layover-note', 'layover_note'); pick('.seg-conf', 'confirmation'); pick('.seg-opby', 'operated_by'); pick('.seg-depterm', 'dep_terminal'); pick('.seg-arrterm', 'arr_terminal'); pick('.seg-bag', 'baggage'); pick('.seg-notes', 'notes');
+    pick('.seg-layover-note', 'layover_note'); pick('.seg-conf', 'confirmation'); pick('.seg-opby', 'operated_by'); pick('.seg-depterm', 'dep_terminal'); pick('.seg-arrterm', 'arr_terminal'); pick('.seg-notes', 'notes');
+    var bags = readBaggage(card); if (bags.length) seg.baggage = bags;
     var dist = parseInt((card.querySelector('.seg-distance') || {}).value, 10); if (dist > 0) seg.distance_km = dist;
     var cb = card.querySelector('.seg-connect-cb');
     if (cb && cb.checked && !isFirst) {

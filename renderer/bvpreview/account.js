@@ -512,6 +512,16 @@
   function fmtTime(t) { if (!t) return ''; var s = '' + t, m = s.indexOf('T') > -1 ? s.split('T')[1] : s; var x = m.match(/(\d{1,2}):(\d{2})/); if (!x) return ''; var hh = +x[1], ap = hh >= 12 ? 'pm' : 'am', h12 = hh % 12 || 12; return h12 + ':' + x[2] + ' ' + ap; }
   /* seats may be an array of chips (['2A','2K']) or a legacy string; render either */
   function seatStr(s) { return Array.isArray(s) ? s.filter(Boolean).join(' · ') : (s || ''); }
+  /* baggage may be an array of {type,qty,weight,unit} or a legacy string */
+  function bagStr(v) {
+    if (!Array.isArray(v)) return v || '';
+    return v.map(function (b) {
+      if (!b) return '';
+      var q = (b.qty && b.qty > 1) ? b.qty + ' × ' : '';
+      var w = (b.weight != null && b.weight !== '') ? ' ' + b.weight + ' ' + (b.unit || 'kg') : '';
+      return (q + (b.type || 'Bag') + w).trim();
+    }).filter(Boolean).join('  ·  ');
+  }
   function itinDateRange(it) { return [it.start_date ? fmtDate(it.start_date) : '', it.end_date ? fmtDate(it.end_date) : ''].filter(Boolean).join(' – '); }
   var _pdfLoading = null;
   function ensureHtml2pdf(cb) {
@@ -605,7 +615,7 @@
       ['Aircraft', s.aircraft || ''],
       ['Terminal', [s.dep_terminal, s.arr_terminal].filter(Boolean).join(' → ')],
       ['Seats', seatStr(s.seats)],
-      ['Baggage', s.baggage || ''],
+      ['Baggage', bagStr(s.baggage)],
       ['Confirmation', s.confirmation || '']
     ]));
     if (s.notes) kids.push(h('p', { class: 'ld-prose', text: s.notes }));
@@ -1528,7 +1538,7 @@
       ['Aircraft', s.aircraft || '—'],
       ['Terminal', [s.dep_terminal, s.arr_terminal].filter(Boolean).join(' → ') || '—'],
       ['Your seats', seatStr(s.seats) || '—'],
-      ['Baggage', s.baggage || '—'],
+      ['Baggage', bagStr(s.baggage) || '—'],
       ['Confirmation', s.confirmation || '—']
     ];
     body.appendChild(h('div', { class: 'bv-flight-meta' }, meta.map(function (m) { return h('div', { class: 'bv-meta-cell' }, [h('div', { class: 'bv-k', text: m[0] }), h('div', { class: 'bv-v', text: m[1] })]); })));

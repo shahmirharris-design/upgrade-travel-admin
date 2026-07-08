@@ -719,3 +719,14 @@ input{ font-family:inherit; }
 .seat-chip-x{ cursor:pointer; border:0; background:none; color:var(--stone); font-size:14px; line-height:1; padding:0; }
 .seat-chip-x:hover{ color:#a3402f; }
 .seat-input{ flex:1; min-width:100px; border:0; outline:0; background:none; font-size:14px; color:var(--ink); padding:4px 2px; }
+
+/* structured baggage rows */
+.bag-head, .bag-row{ display:grid; grid-template-columns:1fr 62px 92px 72px 26px; gap:8px; align-items:center; }
+.bag-head{ margin-bottom:6px; }
+.bag-head span{ font-size:11px; letter-spacing:.04em; color:var(--stone); }
+.bag-rows{ display:flex; flex-direction:column; gap:8px; margin-bottom:8px; }
+.bag-c{ min-width:0; }
+.bag-c .inv-input{ width:100%; }
+.bag-rm{ border:0; background:none; color:var(--stone); font-size:18px; line-height:1; cursor:pointer; padding:0; }
+.bag-rm:hover{ color:#a3402f; }
+.bag-add{ margin-top:0; }
