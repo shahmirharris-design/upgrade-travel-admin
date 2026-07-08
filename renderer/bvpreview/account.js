@@ -5,6 +5,16 @@
   var root = document.getElementById('ut-account');
   if (!root) return;
 
+  /* empty-state icon chip (inline SVG, brand gold) */
+  function emptyIc(kind) {
+    function svp(paths) { return sv('svg', { viewBox: '0 0 24 24', width: '22', height: '22', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.6', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' }, paths); }
+    var icons = {
+      trips: [sv('rect', { x: 2, y: 7, width: 20, height: 14, rx: 2 }), sv('path', { d: 'M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16' })],
+      quotes: [sv('path', { d: 'M12 2v20' }), sv('path', { d: 'M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6' })],
+      invoices: [sv('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }), sv('polyline', { points: '14 2 14 8 20 8' }), sv('path', { d: 'M8 13h8' }), sv('path', { d: 'M8 17h5' })]
+    };
+    return h('span', { class: 'acct-empty-ic' }, [svp(icons[kind] || icons.trips)]);
+  }
   /* ---------- safe DOM builder ---------- */
   function h(tag, attrs, kids) {
     var e = document.createElement(tag);
@@ -367,6 +377,7 @@
       wrap.appendChild(tripCard(upBk[0]));
     } else if (!tripCount) {
       wrap.appendChild(h('div', { class: 'acct-empty' }, [
+        emptyIc('trips'),
         h('p', null, h('strong', { text: 'No trips yet.' })),
         h('p', { text: 'When you book a flight with us, it shows up here automatically — with everything you saved.' }),
         h('a', { class: 'btn btn-primary', href: CONTACT, text: 'Get a quote' })
@@ -421,7 +432,7 @@
       pastClusters.forEach(function (c) { wrap.appendChild(tripGroupBox(c, coveredFor)); });
       if (pastSolo.length || pastBk.length) wrap.appendChild(h('div', { class: 'trip-list' }, pastSolo.map(function (it) { return itinTripCard(it, coveredFor(it)); }).concat(pastBk.map(tripCard))));
     }
-    if (!its.length && !bk.length) wrap.appendChild(h('div', { class: 'acct-empty' }, [h('p', null, h('strong', { text: 'No trips yet.' })), h('p', { text: 'Your trips and itineraries will appear here.' }), h('a', { class: 'btn btn-primary', href: CONTACT, text: 'Get a quote' })]));
+    if (!its.length && !bk.length) wrap.appendChild(h('div', { class: 'acct-empty' }, [emptyIc('trips'), h('p', null, h('strong', { text: 'No trips yet.' })), h('p', { text: 'Your trips and itineraries will appear here.' }), h('a', { class: 'btn btn-primary', href: CONTACT, text: 'Get a quote' })]));
     setTimeout(function () { loadBvImages(wrap); }, 0);
     return wrap;
   }
@@ -521,7 +532,7 @@
       wrap.appendChild(h('h3', { class: 'acct-panel-title acct-subhead', text: 'Earlier quotes' }));
       wrap.appendChild(h('div', { class: 'quote-hist-list' }, decided.map(quoteHistoryRow)));
     }
-    if (!qs.length) wrap.appendChild(h('div', { class: 'acct-empty' }, [h('p', null, h('strong', { text: 'No quotes yet.' })), h('p', { text: 'Request a quote and choose “See it in my account”, and it will show up here.' }), h('a', { class: 'btn btn-primary', href: CONTACT, text: 'Get a quote' })]));
+    if (!qs.length) wrap.appendChild(h('div', { class: 'acct-empty' }, [emptyIc('quotes'), h('p', null, h('strong', { text: 'No quotes yet.' })), h('p', { text: 'Request a quote and choose “See it in my account”, and it will show up here.' }), h('a', { class: 'btn btn-primary', href: CONTACT, text: 'Get a quote' })]));
     return wrap;
   }
   async function decideQuote(id, decision, optLabel) {
@@ -1077,9 +1088,12 @@
       var keys = (inv.payment_methods && inv.payment_methods.length) ? inv.payment_methods : (s2.payment_details ? ['wire'] : []);
       var chosen = keys.map(function (k) { return PAY[k]; }).filter(function (m) { return m && ('' + (m[1] || '')).trim(); });
       if (chosen.length) doc.appendChild(h('div', { class: 'ld-note' }, [h('div', { class: 'ld-sumlabel', text: 'How to pay' })].concat(chosen.map(function (m) {
-        var v = '' + m[1];
-        var isUrl = /^https?:\/\//i.test(v.trim());
-        return h('p', { class: 'ld-payline' }, [h('b', { text: m[0] + ':  ' }), isUrl ? h('a', { href: v.trim(), target: '_blank', rel: 'noopener', class: 'ld-paylink', text: v.trim() }) : v]);
+        var v = ('' + m[1]).trim();
+        var isUrl = /^https?:\/\//i.test(v);
+        return h('div', { class: 'ld-pay-row' }, [
+          h('span', { class: 'ld-pay-k', text: m[0] }),
+          isUrl ? h('a', { href: v, target: '_blank', rel: 'noopener', class: 'ld-paylink', text: v }) : h('span', { class: 'ld-pay-v', text: v })
+        ]);
       }))));
     }
     if (inv.notes) doc.appendChild(h('div', { class: 'ld-note' }, [h('div', { class: 'ld-sumlabel', text: 'From your specialist' }), h('p', { text: inv.notes })]));
@@ -1163,7 +1177,7 @@
       }
       wrap.appendChild(h('div', { class: 'trip-list' }, ivs.map(invoiceCard)));
     }
-    else wrap.appendChild(h('div', { class: 'acct-empty' }, [h('p', null, h('strong', { text: 'No invoices yet.' })), h('p', { text: 'Invoices for your booked trips will appear here.' })]));
+    else wrap.appendChild(h('div', { class: 'acct-empty' }, [emptyIc('invoices'), h('p', null, h('strong', { text: 'No invoices yet.' })), h('p', { text: 'Invoices for your booked trips will appear here.' })]));
     return wrap;
   }
 

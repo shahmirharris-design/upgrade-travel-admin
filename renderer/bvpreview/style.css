@@ -2012,3 +2012,10 @@ p, .ld-prose, .bv-day-text, .quote-note{ text-wrap: pretty; }
 .cr-actions{ display:flex; gap:10px; margin-top:14px; }
 .cr-actions .btn{ width:auto; padding:11px 18px; }
 .cr-done{ text-align:left; }
+
+/* empty-state icon + richer how-to-pay rows */
+.acct-empty-ic{ width:52px; height:52px; margin:0 auto 12px; border-radius:999px; background:rgba(169,133,76,.12); color:var(--gold-ink, #7A5E29); display:flex; align-items:center; justify-content:center; }
+.ld-pay-row{ display:flex; align-items:baseline; gap:14px; padding:9px 0; border-bottom:1px solid #E7DCC4; }
+.ld-pay-row:last-child{ border-bottom:0; }
+.ld-pay-k{ flex:none; width:160px; font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:#7A5E29; font-weight:600; }
+.ld-pay-v{ font-size:14px; color:#211B12; white-space:pre-line; }

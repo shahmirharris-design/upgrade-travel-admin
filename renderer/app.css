@@ -903,3 +903,12 @@ input{ font-family:inherit; }
 .dash-panel-h{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
 .dash-panel-link{ border:0; background:none; font-size:12px; font-weight:600; color:#7A5E29; cursor:pointer; padding:0; }
 .dash-panel-link:hover{ text-decoration:underline; }
+
+/* empty states + unconfigured payments hint */
+.empty-box{ display:flex; flex-direction:column; align-items:center; gap:6px; padding:44px 20px; text-align:center; background:var(--card); border:1px dashed rgba(169,133,76,.4); border-radius:14px; }
+.empty-ic{ width:52px; height:52px; border-radius:999px; background:rgba(169,133,76,.12); color:var(--gold); display:flex; align-items:center; justify-content:center; margin-bottom:4px; }
+.empty-ic svg{ width:24px; height:24px; }
+.empty-t{ font-family:var(--serif); font-weight:500; font-size:19px; color:var(--ink); }
+.empty-s{ font-size:13px; color:var(--stone); max-width:44ch; line-height:1.55; }
+.payopt-none{ font-size:13px; color:var(--stone); }
+.payopt-go{ border:0; background:none; padding:0; font-size:13px; font-weight:600; color:#7A5E29; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }

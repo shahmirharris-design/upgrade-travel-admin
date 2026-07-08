@@ -216,6 +216,22 @@
   }
   function doSignOut() { teardownRealtime(); state.customers = []; state.selectedId = null; sb.auth.signOut().then(function () { viewLogin(); }).catch(function () { viewLogin(); }); }
   function signOut() { confirmDialog({ title: 'Sign out', message: 'Sign out of the admin?', detail: 'Anything mid-edit that is not saved will be lost.', confirmText: 'Sign out', onConfirm: doSignOut }); }
+  var EMPTY_ICONS = {
+    invoice: [['path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }], ['polyline', { points: '14 2 14 8 20 8' }], ['path', { d: 'M8 13h8' }], ['path', { d: 'M8 17h5' }]],
+    quote: [['path', { d: 'M12 2v20' }], ['path', { d: 'M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6' }]],
+    itinerary: [['path', { d: 'M14.1 6.3 21 3l-3.3 6.9L21 21l-6.9-3.3L3 21l3.3-11.1L3 3z' }]],
+    request: [['path', { d: 'M22 12h-6l-2 3h-4l-2-3H2' }], ['path', { d: 'M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.7 4H7.3a2 2 0 0 0-1.8 1.1z' }]],
+    package: [['path', { d: 'M16.5 9.4 7.55 4.24' }], ['path', { d: 'M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z' }], ['polyline', { points: '3.29 7 12 12 20.71 7' }], ['path', { d: 'M12 22V12' }]],
+    trip: [['rect', { x: 2, y: 7, width: 20, height: 14, rx: 2 }], ['path', { d: 'M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16' }]],
+    task: [['path', { d: 'M9 11l3 3L22 4' }], ['path', { d: 'M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11' }]]
+  };
+  function emptyBox(kind, title, sub) {
+    return h('div', { class: 'empty-box' }, [
+      h('span', { class: 'empty-ic' }, [svgIcon(EMPTY_ICONS[kind] || EMPTY_ICONS.trip)]),
+      h('b', { class: 'empty-t', text: title }),
+      sub ? h('span', { class: 'empty-s', text: sub }) : null
+    ]);
+  }
   function mainHead(title, sub) { return h('div', { class: 'main-head' }, [h('h1', { class: 'main-title', text: title }), sub ? h('p', { class: 'main-sub', text: sub }) : null]); }
   /* ---------- global search: one box for customers, quotes, invoices, itineraries ---------- */
   var _gsTimer = null;
@@ -674,7 +690,7 @@
     var tasks = state.tasks || [], active = tasks.filter(function (t) { return !t.done; }), done = tasks.filter(function (t) { return t.done; });
     var today = todayISO(), groups = { overdue: [], today: [], upcoming: [], someday: [] };
     active.forEach(function (t) { var g = !t.due_date ? 'someday' : (t.due_date < today ? 'overdue' : (t.due_date === today ? 'today' : 'upcoming')); groups[g].push(t); });
-    if (!active.length) box.appendChild(h('div', { class: 'task-empty', text: 'All clear — no open tasks.' }));
+    if (!active.length) box.appendChild(emptyBox('task', 'All clear', 'No open tasks. Reminders and change requests land here.'));
     [['overdue', 'Overdue'], ['today', 'Today'], ['upcoming', 'Upcoming'], ['someday', 'No date']].forEach(function (g) {
       if (!groups[g[0]].length) return;
       box.appendChild(h('div', { class: 'task-group-h task-g-' + g[0], text: g[1] + ' · ' + groups[g[0]].length }));
@@ -804,7 +820,7 @@
       if (f === 'upcoming') return t.stage !== 'traveled' && (!t.depart || t.depart >= today);
       return t.stage === f;
     });
-    if (!trips.length) { box.appendChild(h('div', { class: 'task-empty', text: 'No trips in this view yet.' })); return; }
+    if (!trips.length) { box.appendChild(emptyBox('trip', 'No trips in this view', 'Quotes, invoices and itineraries roll up here as trips.')); return; }
     box.appendChild(h('div', { class: 'trip-list' }, trips.map(tripCard)));
   }
   function tripCard(t) {
@@ -1463,8 +1479,8 @@
       else if (e.key === 'Backspace' && !input.value) { var last = box.querySelector('.seat-chip:last-of-type'); if (last) last.remove(); }
     });
     input.addEventListener('blur', function () { if (input.value.trim()) { addChip(input.value); input.value = ''; } });
+    box.appendChild(input); /* input must be in the box BEFORE seeding chips: insertBefore needs it */
     seatList(value).forEach(addChip);
-    box.appendChild(input);
     box.addEventListener('click', function () { input.focus(); });
     return h('label', { class: 'inv-field seg-seats-wrap' }, [h('span', { text: 'Seats' }), box]);
   }
@@ -1914,7 +1930,7 @@
   function renderInvoiceList() {
     var box = document.getElementById('invlist-box'); if (!box) return;
     var invs = state.allInvoices || []; box.textContent = '';
-    if (!invs.length) { box.appendChild(h('div', { class: 'pkg-empty', text: 'No invoices sent yet.' })); return; }
+    if (!invs.length) { box.appendChild(emptyBox('invoice', 'No invoices yet', 'Send your first invoice and it appears here with payments and profit.')); return; }
     var needle = (state.invSearch || '').trim().toLowerCase();
     var shown = !needle ? invs : invs.filter(function (i) { return ((i.invoice_number || '') + ' ' + (i.title || '') + ' ' + (i.customer_email || '') + ' ' + findCustomerNameByEmail(i.customer_email) + ' ' + quoteRouteLabel(i)).toLowerCase().indexOf(needle) > -1; });
     var outstanding = 0; invs.forEach(function (i) { outstanding += Math.max(dnum(i.total_charged) - dnum(i.amount_paid), 0); });
@@ -2114,7 +2130,7 @@
   function renderSentQuotes() {
     var box = document.getElementById('sentq-box'); if (!box) return;
     var qs = state.allQuotes || []; box.textContent = '';
-    if (!qs.length) { box.appendChild(h('div', { class: 'pkg-empty', text: 'No quotes sent yet.' })); return; }
+    if (!qs.length) { box.appendChild(emptyBox('quote', 'No quotes yet', 'Quotes you send appear here with their status and follow-ups.')); return; }
     var filt = state.quoteFilter || 'all';
     var counts = { all: qs.length, sent: 0, accepted: 0, declined: 0 };
     qs.forEach(function (q) { var s = q.status || 'sent'; if (counts[s] != null) counts[s]++; });
@@ -2231,7 +2247,7 @@
     var r = await sb.from('quote_requests').select('*').eq('status', 'new').order('created_at', { ascending: false });
     box = document.getElementById('qreq-box'); if (!box) return;
     var reqs = r.data || []; box.textContent = '';
-    if (!reqs.length) { box.appendChild(h('div', { class: 'pkg-empty', text: 'No incoming requests right now.' })); return; }
+    if (!reqs.length) { box.appendChild(emptyBox('request', 'The inbox is clear', 'New quote requests from the website and from Adam land here.')); return; }
     /* Adam-sourced requests link back to their chat; pull his brief so nothing he learned is lost */
     var briefs = {};
     var adamIds = reqs.filter(reqIsAdam).map(function (q) { return q.id; });
@@ -2394,7 +2410,7 @@
     var box = document.getElementById('pkg-list'); if (!box) return;
     box.textContent = '';
     var pkgs = state.templates;
-    if (!pkgs.length) { box.appendChild(h('div', { class: 'pkg-empty', text: 'No packages yet. Click “+ New package” to build your first reusable trip.' })); return; }
+    if (!pkgs.length) { box.appendChild(emptyBox('package', 'No packages yet', 'Build a reusable trip once and drop it into any quote or itinerary.')); return; }
     pkgs.forEach(function (pkg) { box.appendChild(packageCard(pkg)); });
   }
   function packageCard(pkg) {
@@ -2645,12 +2661,17 @@
         h('h3', { class: 'inv-h3', text: 'Pricing & savings' }),
         h('div', { class: 'inv-row2' }, [h('label', { class: 'inv-field' }, [h('span', { text: 'Currency' }), currencySelect(d.currency)]), invField('Comparable price (booked elsewhere)', 'inv-comp', 'number', '0.00', d.comparable_total)]),
         pricingRow2,
-        (state.docKind === 'invoice' && payMethodDefs().length) ? h('div', { class: 'inv-field', style: 'margin-top:16px' }, [
+        (state.docKind === 'invoice') ? h('div', { class: 'inv-field', style: 'margin-top:16px' }, [
           h('span', { text: 'Payment options shown on this invoice' }),
-          h('div', { class: 'payopt-list' }, payMethodDefs().map(function (m) {
-            var on = d.payment_methods ? d.payment_methods.indexOf(m[0]) > -1 : true;
-            return h('label', { class: 'payopt' }, [h('input', { type: 'checkbox', class: 'payopt-cb', value: m[0], checked: on ? '' : null }), h('span', { text: m[1] })]);
-          }))
+          payMethodDefs().length
+            ? h('div', { class: 'payopt-list' }, payMethodDefs().map(function (m) {
+                var on = d.payment_methods ? d.payment_methods.indexOf(m[0]) > -1 : true;
+                return h('label', { class: 'payopt' }, [h('input', { type: 'checkbox', class: 'payopt-cb', value: m[0], checked: on ? '' : null }), h('span', { text: m[1] })]);
+              }))
+            : h('div', { class: 'payopt-none' }, [
+                h('span', { text: 'No payment methods set up yet. ' }),
+                h('button', { type: 'button', class: 'payopt-go', onclick: function () { state.tab = 'settings'; refreshNav(); renderTab(); }, text: 'Add them in Settings → Getting paid' })
+              ])
         ]) : null,
         costRow,
         h('div', { class: 'inv-totals' }, [totalRow('Total', 'inv-t-charged'), totalRow('Comparable', 'inv-t-comp'), totalRow('You saved', 'inv-t-saved', true)])
@@ -3195,7 +3216,7 @@
   function renderItinList() {
     var box = document.getElementById('sentitin-list'); if (!box) return;
     var rows = state.allItins || []; box.textContent = '';
-    if (!rows.length) { box.appendChild(h('div', { class: 'pkg-empty', text: 'No itineraries sent yet.' })); return; }
+    if (!rows.length) { box.appendChild(emptyBox('itinerary', 'No itineraries yet', 'Send a trip and it appears here, with share links and duplicates one click away.')); return; }
     var needle = (state.itSearch || '').trim().toLowerCase();
     var shown = !needle ? rows : rows.filter(function (row) { return ((row.itinerary_number || '') + ' ' + (row.title || '') + ' ' + (row.destination || '') + ' ' + (row.customer_email || '') + ' ' + findCustomerNameByEmail(row.customer_email) + ' ' + (row.traveler_names || '')).toLowerCase().indexOf(needle) > -1; });
     if (!shown.length) { box.appendChild(h('p', { class: 'qf-empty', text: 'Nothing matches that search.' })); return; }
