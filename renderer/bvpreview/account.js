@@ -463,6 +463,21 @@
       priceKids.push(h('div', { class: 'q-price-item q-price-save' }, [h('div', { class: 'q-price-k', text: 'You save' }), h('div', { class: 'q-price-v', text: money(saved, q.currency) })]));
     }
     card.appendChild(h('div', { class: 'q-price' }, priceKids));
+    /* alternative options: the client picks the one they want */
+    if (q.options && q.options.length) {
+      var open = (q.status || 'sent') === 'sent';
+      card.appendChild(h('div', { class: 'q-opts' }, [h('div', { class: 'q-opts-h', text: 'Other options for this trip' })].concat(q.options.map(function (o) {
+        var ot = Number(o.total) || 0, oc = Number(o.comparable) || 0;
+        return h('div', { class: 'q-opt' }, [
+          h('div', { class: 'q-opt-main' }, [
+            h('div', { class: 'q-opt-label', text: o.label || 'Option' }),
+            o.desc ? h('div', { class: 'q-opt-desc', text: o.desc }) : null,
+            h('div', { class: 'q-opt-price' }, [h('strong', { text: money(ot, q.currency) }), oc > ot ? h('span', { class: 'q-opt-comp', text: money(oc, q.currency) }) : null, oc > ot ? h('span', { class: 'q-opt-save', text: 'Save ' + money(oc - ot, q.currency) }) : null])
+          ]),
+          open ? h('button', { class: 'btn btn-ghost q-opt-btn', 'data-action': 'acceptquote', 'data-id': q.id, 'data-opt': o.label || 'Option', text: 'Accept this option' }) : (q.chosen_option && q.chosen_option === o.label ? h('span', { class: 'q-opt-chosen', text: 'Your choice ✓' }) : null)
+        ]);
+      }))));
+    }
     var actions = [];
     if ((q.status || 'sent') === 'sent') {
       actions.push(h('button', { class: 'btn btn-primary', 'data-action': 'acceptquote', 'data-id': q.id, text: 'Accept quote' }));
@@ -472,7 +487,7 @@
     actions.push(h('button', { type: 'button', class: 'btn btn-ghost q-view-btn', onclick: function () { openOverlay(quoteDoc(q), qFile, LD_PDF); }, text: 'View quote' }));
     actions.push(h('button', { type: 'button', class: 'btn btn-ghost q-view-btn', onclick: function () { makeDocPDF(quoteDoc(q), qFile, 'open', LD_PDF); }, text: 'View PDF' }));
     card.appendChild(h('div', { class: 'quote-actions' }, actions));
-    if ((q.status || 'sent') !== 'sent') card.appendChild(h('p', { class: 'quote-decided', text: q.status === 'accepted' ? 'You accepted this quote. Your agent will be in touch to book it.' : 'You declined this quote.' }));
+    if ((q.status || 'sent') !== 'sent') card.appendChild(h('p', { class: 'quote-decided', text: q.status === 'accepted' ? ('You accepted this quote' + (q.chosen_option ? ' (' + q.chosen_option + ')' : '') + '. Your agent will be in touch to book it.') : 'You declined this quote.' }));
     if (q.notes) card.appendChild(h('p', { class: 'quote-note', text: q.notes }));
     card.appendChild(h('p', { class: 'quote-ref', text: ['Quote ' + (q.quote_number || ''), stampText(q)].filter(Boolean).join('   ·   ') }));
     return card;
@@ -483,7 +498,7 @@
     return h('div', { class: 'quote-hist' }, [
       h('div', { class: 'quote-hist-main' }, [
         h('div', { class: 'quote-hist-top' }, [h('strong', { text: q.title || ('Quote ' + (q.quote_number || '')) }), quoteStatusBadge(q.status)]),
-        h('div', { class: 'quote-hist-sub', text: [q.quote_number, q.destination, total ? money(total, q.currency) : ''].filter(Boolean).join('  ·  ') })
+        h('div', { class: 'quote-hist-sub', text: [q.quote_number, q.destination, q.chosen_option ? 'Chose ' + q.chosen_option : '', total ? money(total, q.currency) : ''].filter(Boolean).join('  ·  ') })
       ]),
       h('button', { type: 'button', class: 'btn btn-ghost quote-hist-btn', onclick: function () { openOverlay(quoteDoc(q), 'Quote-' + (q.quote_number || 'flyupgrade') + '.pdf', LD_PDF); }, text: 'View' })
     ]);
@@ -502,9 +517,9 @@
     if (!qs.length) wrap.appendChild(h('div', { class: 'acct-empty' }, [h('p', null, h('strong', { text: 'No quotes yet.' })), h('p', { text: 'Request a quote and choose “See it in my account”, and it will show up here.' }), h('a', { class: 'btn btn-primary', href: CONTACT, text: 'Get a quote' })]));
     return wrap;
   }
-  async function decideQuote(id, decision) {
-    await sb.rpc('accept_quote', { qid: id, decision: decision });
-    for (var i = 0; i < (state.quotes || []).length; i++) { if (state.quotes[i].id === id) { state.quotes[i].status = decision; break; } }
+  async function decideQuote(id, decision, optLabel) {
+    await sb.rpc('accept_quote', { qid: id, decision: decision, option_label: optLabel || null });
+    for (var i = 0; i < (state.quotes || []).length; i++) { if (state.quotes[i].id === id) { state.quotes[i].status = decision; state.quotes[i].chosen_option = decision === 'accepted' ? (optLabel || null) : null; break; } }
     renderContent();
   }
   /* ---------- itineraries + invoices (customer-facing docs) ---------- */
@@ -981,6 +996,17 @@
     doc.appendChild(h('div', { class: 'ld-group-label', text: 'The Pricing' }));
     doc.appendChild(ldCharges(q.line_items || [], cur, [['Quote total', money(total, cur), true]]));
     if (comp > total) doc.appendChild(ldSave(comp, total, cur));
+    if (q.options && q.options.length) {
+      doc.appendChild(h('div', { class: 'ld-group-label', text: 'Your Options' }));
+      q.options.forEach(function (o) {
+        var ot = Number(o.total) || 0, oc = Number(o.comparable) || 0;
+        doc.appendChild(h('div', { class: 'ld-note ld-opt' }, [
+          h('div', { class: 'ld-sumlabel', text: (o.label || 'Option') + (q.chosen_option === o.label ? '  ·  chosen' : '') }),
+          o.desc ? h('p', { class: 'ld-prose', text: o.desc }) : null,
+          h('p', { class: 'ld-opt-price', text: money(ot, cur) + (oc > ot ? ', compared to ' + money(oc, cur) + ' booked elsewhere' : '') })
+        ]));
+      });
+    }
     if (q.notes) doc.appendChild(h('div', { class: 'ld-note' }, [h('div', { class: 'ld-sumlabel', text: 'From your specialist' }), h('p', { text: q.notes })]));
     doc.appendChild(h('p', { class: 'ld-terms', text: (state.settings && state.settings.quote_terms) || ('This quote is an estimate' + (q.valid_until ? ', valid until ' + fmtDate(q.valid_until) : '') + '. Fares and availability are confirmed at the time of ticketing and may change until then.') }));
     doc.appendChild(ldFooter(q.quote_number));
@@ -2376,7 +2402,7 @@
     var t = e.target.closest('[data-mode]'); if (t) { e.preventDefault(); viewAuth(t.getAttribute('data-mode')); return; }
     var a = e.target.closest('[data-action=signout]'); if (a) { e.preventDefault(); doSignOut(); }
     var rmav = e.target.closest('[data-action=removeavatar]'); if (rmav) { e.preventDefault(); removeAvatar(); return; }
-    var aq = e.target.closest('[data-action=acceptquote]'); if (aq) { e.preventDefault(); decideQuote(aq.getAttribute('data-id'), 'accepted'); return; }
+    var aq = e.target.closest('[data-action=acceptquote]'); if (aq) { e.preventDefault(); decideQuote(aq.getAttribute('data-id'), 'accepted', aq.getAttribute('data-opt') || null); return; }
     var dq = e.target.closest('[data-action=declinequote]'); if (dq) { e.preventDefault(); decideQuote(dq.getAttribute('data-id'), 'declined'); return; }
   });
   document.addEventListener('click', function (e) { if (!e.target.closest('.ut-select')) closeAllSelects(); });
@@ -2390,6 +2416,22 @@
     /* mode 'doc' shows the printable Loya document (with working PDF download); default is the showpiece */
     if (window.UT_ITIN_PREVIEW.mode === 'doc') openOverlay(itinDoc(pvIt), 'Itinerary-' + (pvIt.itinerary_number || 'flyupgrade') + '.pdf', LD_PDF);
     else openBeautiful(pvIt);
+    return;
+  }
+  /* magic share link: /account/?trip=<token> renders the itinerary read-only, no sign-in needed */
+  var shareToken = (function () { try { return new URLSearchParams(location.search).get('trip') || ''; } catch (e) { return ''; } })();
+  if (shareToken && /^[0-9a-f-]{36}$/i.test(shareToken)) {
+    viewLoading();
+    ensureGSAP(function () { });
+    fetch(UT_SB.url + '/functions/v1/shared-itinerary?t=' + encodeURIComponent(shareToken))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.itinerary) { viewAuth('signin'); return; }
+        state.settings = d.settings || {}; state.profile = d.profile || {};
+        openBeautiful(d.itinerary);
+        viewAuth('signin'); /* behind the overlay, so closing the itinerary lands somewhere sane */
+      })
+      .catch(function () { viewAuth('signin'); });
     return;
   }
   /* seed from the URL so a password-reset link can't lose a race to getSession() and land on the dashboard */

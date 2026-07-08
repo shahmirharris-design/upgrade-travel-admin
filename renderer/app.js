@@ -1631,7 +1631,7 @@
       h('div', null, [h('h3', { class: 'qd-title', text: q.title || ('Quote ' + (q.quote_number || '')) }), h('div', { class: 'qd-sub', text: [fullName(cust), cust.email].filter(Boolean).join('  ·  ') })]),
       h('span', { class: 'sq-badge sq-' + (q.status || 'sent'), text: sqStatusLabel(q.status) })
     ]));
-    var chips = [q.quote_number, ttLabel(q.trip_type), q.destination, paxLabel(q), q.created_at ? 'Sent ' + fmtDate(q.created_at) : '', q.valid_until ? 'Valid until ' + fmtDate(q.valid_until) : ''].filter(Boolean);
+    var chips = [q.quote_number, ttLabel(q.trip_type), q.destination, paxLabel(q), q.created_at ? 'Sent ' + fmtDate(q.created_at) : '', q.valid_until ? 'Valid until ' + fmtDate(q.valid_until) : '', q.chosen_option ? 'Chose ' + q.chosen_option : ''].filter(Boolean);
     node.appendChild(h('div', { class: 'qd-chips' }, chips.map(function (c) { return h('span', { class: 'qd-chip', text: c }); })));
     if (segs.length) {
       node.appendChild(h('h4', { class: 'qd-h', text: 'Flights' }));
@@ -1658,6 +1658,15 @@
       comp > total ? h('div', { class: 'qd-trow' }, [h('span', { text: 'Comparable price' }), h('span', { text: money(comp, q.currency) })]) : null,
       comp > total ? h('div', { class: 'qd-trow qd-saved' }, [h('span', { text: 'They save' }), h('b', { text: money(comp - total, q.currency) })]) : null
     ]));
+    if (q.options && q.options.length) {
+      node.appendChild(h('h4', { class: 'qd-h', text: 'Alternative options' }));
+      q.options.forEach(function (o) {
+        node.appendChild(h('div', { class: 'qd-seg' }, [
+          h('div', { class: 'rev-strong', text: (o.label || 'Option') + (q.chosen_option === o.label ? '  · CHOSEN' : '') }),
+          h('div', { class: 'rev-line', text: [o.desc, money(Number(o.total) || 0, q.currency), (Number(o.comparable) > Number(o.total)) ? 'comparable ' + money(Number(o.comparable), q.currency) : ''].filter(Boolean).join('  ·  ') })
+        ]));
+      });
+    }
     if (q.notes) { node.appendChild(h('h4', { class: 'qd-h', text: 'Notes' })); node.appendChild(h('p', { class: 'qd-notes', text: q.notes })); }
     node.appendChild(h('div', { class: 'qd-foot' }, [
       h('button', { type: 'button', class: 'btn btn-primary', style: 'width:auto', onclick: function () { closeAdminOverlay(); editQuote(q); }, text: 'Edit & resend' }),
@@ -1669,7 +1678,7 @@
   function editQuote(q) {
     state.docCustomer = findCustomerForDoc(q);
     state.builderTab = 'quote'; state.docKind = 'quote';
-    state.docDraft = { editing_id: q.id, editing_number: q.quote_number, title: q.title || '', destination: q.destination || '', trip_type: q.trip_type || null, segments: q.segments || [], pax_adults: q.pax_adults != null ? q.pax_adults : 1, pax_children: q.pax_children || 0, pax_infants: q.pax_infants || 0, booking_reference: q.booking_reference || '', line_items: q.line_items || [], currency: q.currency || 'USD', comparable_total: q.comparable_total || null, valid_until: q.valid_until || null, notes: q.notes || '' };
+    state.docDraft = { editing_id: q.id, editing_number: q.quote_number, title: q.title || '', destination: q.destination || '', trip_type: q.trip_type || null, segments: q.segments || [], pax_adults: q.pax_adults != null ? q.pax_adults : 1, pax_children: q.pax_children || 0, pax_infants: q.pax_infants || 0, booking_reference: q.booking_reference || '', line_items: q.line_items || [], currency: q.currency || 'USD', comparable_total: q.comparable_total || null, valid_until: q.valid_until || null, options: q.options || [], notes: q.notes || '' };
     state.docFlash = { kind: 'note', text: 'Editing ' + (q.quote_number || 'this quote') + '. Make your changes, then review & resend — it updates the same quote.' };
     state.docView = 'form'; state.tab = 'quotes'; refreshNav(); renderTab();
   }
@@ -2125,6 +2134,7 @@
         costRow,
         h('div', { class: 'inv-totals' }, [totalRow('Total', 'inv-t-charged'), totalRow('Comparable', 'inv-t-comp'), totalRow('You saved', 'inv-t-saved', true)])
       ]),
+      state.docKind === 'quote' ? quoteOptionsSection(d.options) : null,
       h('div', { class: 'inv-section' }, [h('h3', { class: 'inv-h3', text: 'Notes (optional)' }), h('textarea', { id: 'inv-notes', class: 'inv-input inv-textarea', rows: '2', placeholder: 'Anything the customer should know.', value: d.notes || '' })]),
       h('div', { class: 'inv-submit' }, [h('span', { id: 'draft-ind', class: 'draft-ind', text: 'Auto-saved for this customer' }), h('div', { id: 'inv-msg', class: 'msg', style: 'display:none' }), h('button', { type: 'submit', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Create & review' })])
     ]);
@@ -2148,6 +2158,37 @@
     var pe = document.getElementById('inv-profit'); if (pe) { var cost = parseFloat(val('inv-cost')) || 0; pe.textContent = money(total - cost, cur); }
   }
   function showInvMsg(el, text, kind) { el.className = 'msg ' + kind; el.textContent = text; el.style.display = 'block'; }
+  /* multi-option quotes: alternatives the customer can pick between (label, blurb, price) */
+  function quoteOptRow(o) {
+    o = o || {};
+    return h('div', { class: 'qo-row' }, [
+      h('input', { class: 'inv-input qo-label', type: 'text', placeholder: 'Option name, e.g. Qatar Business', autocomplete: 'off', value: o.label || '' }),
+      h('input', { class: 'inv-input qo-desc', type: 'text', placeholder: 'One-line description (optional)', autocomplete: 'off', value: o.desc || '' }),
+      h('input', { class: 'inv-input qo-total', type: 'number', min: '0', step: '0.01', placeholder: 'Price', value: o.total != null ? o.total : '' }),
+      h('input', { class: 'inv-input qo-comp', type: 'number', min: '0', step: '0.01', placeholder: 'Comparable', value: o.comparable != null ? o.comparable : '' }),
+      h('button', { type: 'button', class: 'inv-line-rm', title: 'Remove option', onclick: function (e) { e.target.closest('.qo-row').remove(); }, text: '\u00d7' })
+    ]);
+  }
+  function quoteOptionsSection(options) {
+    return h('div', { class: 'inv-section' }, [
+      h('h3', { class: 'inv-h3', text: 'Alternative options (optional)' }),
+      h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 12px', text: 'Give the customer a choice, like Option B on a different airline or cabin. The pricing above stays the lead offer; the customer accepts whichever they prefer.' }),
+      h('div', { class: 'qo-head' }, [h('span', { text: 'Option' }), h('span', { text: 'Description' }), h('span', { text: 'Price' }), h('span', { text: 'Comparable' }), h('span')]),
+      h('div', { id: 'q-opts' }, (options || []).map(quoteOptRow)),
+      h('button', { type: 'button', class: 'inv-addline', onclick: function () { document.getElementById('q-opts').appendChild(quoteOptRow()); }, text: '+ Add an option' })
+    ]);
+  }
+  function readQuoteOptions() {
+    var out = [];
+    Array.prototype.forEach.call(document.querySelectorAll('#q-opts .qo-row'), function (r) {
+      var label = (r.querySelector('.qo-label') || {}).value || '', total = parseFloat((r.querySelector('.qo-total') || {}).value);
+      label = label.trim();
+      if (!label || isNaN(total)) return;
+      var comp = parseFloat((r.querySelector('.qo-comp') || {}).value);
+      out.push({ label: label, desc: ((r.querySelector('.qo-desc') || {}).value || '').trim() || null, total: total, comparable: isNaN(comp) ? null : comp });
+    });
+    return out;
+  }
   function collectDraft() {
     var items = [];
     Array.prototype.forEach.call(document.querySelectorAll('#inv-lines .inv-line'), function (r) {
@@ -2159,7 +2200,7 @@
     var pa = parseInt(val('inv-adults'), 10); if (isNaN(pa)) pa = 0;
     var pc = parseInt(val('inv-children'), 10) || 0, pi = parseInt(val('inv-infants'), 10) || 0;
     var dest = segs.length ? (segs[0].to.city + ', ' + segs[0].to.country) : null;
-    return { customer: state.docCustomer, request_id: state.docDraft && state.docDraft.request_id || null, source_quote_id: state.docDraft && state.docDraft.source_quote_id || null, editing_id: state.docDraft && state.docDraft.editing_id || null, editing_number: state.docDraft && state.docDraft.editing_number || null, title: val('inv-title'), destination: dest, trip_type: tripType, segments: segs, pax_adults: pa, pax_children: pc, pax_infants: pi, passengers: (pa + pc + pi) || 1, booking_reference: val('inv-ref'), line_items: items, currency: val('inv-cur') || 'USD', comparable_total: parseFloat(val('inv-comp')) || null, deposit_paid: parseFloat(val('inv-deposit')) || null, net_cost: parseFloat(val('inv-cost')) || null, due_date: val('inv-due') || null, valid_until: val('inv-valid') || null, notes: val('inv-notes') };
+    return { customer: state.docCustomer, request_id: state.docDraft && state.docDraft.request_id || null, source_quote_id: state.docDraft && state.docDraft.source_quote_id || null, editing_id: state.docDraft && state.docDraft.editing_id || null, editing_number: state.docDraft && state.docDraft.editing_number || null, title: val('inv-title'), destination: dest, trip_type: tripType, segments: segs, pax_adults: pa, pax_children: pc, pax_infants: pi, passengers: (pa + pc + pi) || 1, booking_reference: val('inv-ref'), line_items: items, currency: val('inv-cur') || 'USD', comparable_total: parseFloat(val('inv-comp')) || null, deposit_paid: parseFloat(val('inv-deposit')) || null, net_cost: parseFloat(val('inv-cost')) || null, due_date: val('inv-due') || null, valid_until: val('inv-valid') || null, options: readQuoteOptions(), notes: val('inv-notes') };
   }
   /* a "round trip" with only one filled flight would silently send as a one-way — stop it */
   function roundTripGap(d) { return d.trip_type === 'round' && (d.segments || []).length === 1; }
@@ -2227,7 +2268,7 @@
       /* on an EDIT, recorded payments stay as they are — only fresh invoices start at the deposit */
       if (!editing) { payload.amount_paid = dep; if (total > 0 && dep >= total - 0.001) payload.paid_at = new Date().toISOString(); }
     }
-    else { payload.valid_until = d.valid_until || null; if (d.request_id) payload.request_id = d.request_id; }
+    else { payload.valid_until = d.valid_until || null; payload.options = (d.options && d.options.length) ? d.options : null; if (d.request_id) payload.request_id = d.request_id; }
     btn.disabled = true; btn.textContent = editing ? 'Resending…' : 'Sending…';
     var r;
     if (editing) { if (state.docKind === 'quote') payload.status = 'sent'; r = await sb.from(c.table).update(payload).eq('id', d.editing_id).select().maybeSingle(); }
@@ -2628,7 +2669,13 @@
       ]),
       h('div', { class: 'sq-actions' }, [
         h('button', { type: 'button', class: 'btn btn-primary', style: 'width:auto; padding:8px 14px', onclick: function () { adminOverlay(itinDetail(row), 'Itinerary ' + (row.itinerary_number || '')); }, text: 'View' }),
-        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:8px 14px', onclick: function () { editItinerary(row); }, text: 'Edit & resend' })
+        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:8px 14px', onclick: function () { editItinerary(row); }, text: 'Edit & resend' }),
+        row.share_token ? h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:8px 14px', title: 'Anyone with this link can view the itinerary, no sign-in needed', onclick: function (e) {
+          var link = 'https://flyupgrade.com/account/?trip=' + row.share_token, btn = e.target;
+          function done() { btn.textContent = 'Link copied ✓'; setTimeout(function () { btn.textContent = 'Copy link'; }, 1800); }
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done).catch(function () { window.prompt('Copy this link:', link); });
+          else window.prompt('Copy this link:', link);
+        }, text: 'Copy link' }) : null
       ])
     ]);
   }
