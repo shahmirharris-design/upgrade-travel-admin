@@ -665,3 +665,14 @@ input{ font-family:inherit; }
 .gt-banner{ display:flex; align-items:center; gap:12px; padding:12px 16px; margin-bottom:18px; border:1px solid var(--line); border-left:3px solid var(--gold); border-radius:11px; background:rgba(169,133,76,.07); }
 .gt-banner-tag{ flex:none; font-size:10px; letter-spacing:.16em; text-transform:uppercase; font-weight:700; color:var(--deep); background:var(--gold); padding:4px 9px; border-radius:6px; }
 .gt-banner-text{ font-size:13px; color:var(--ink-2); }
+
+/* sent-itineraries compact bar (opens the full list page) */
+.sent-bar{ display:flex; align-items:center; justify-content:space-between; gap:14px; padding:14px 18px; margin-bottom:18px; border:1px solid var(--line); border-radius:12px; background:var(--card); }
+.sent-bar-main{ display:flex; align-items:baseline; gap:10px; }
+.sent-bar-label{ font-family:var(--serif); font-size:17px; color:var(--ink); }
+.sent-bar-count{ font-size:12px; font-weight:700; color:var(--deep); background:var(--gold); border-radius:999px; padding:2px 10px; min-width:22px; text-align:center; }
+
+/* group-trip pod editor: "shared journey goes here" divider between Departure and Return */
+.gt-mid-note{ display:flex; align-items:center; gap:14px; margin:2px 2px 18px; }
+.gt-mid-line{ flex:1; height:1px; background:var(--line); }
+.gt-mid-text{ flex:none; font-size:11px; letter-spacing:.14em; text-transform:uppercase; font-weight:600; color:var(--gold); }

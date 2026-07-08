@@ -1025,7 +1025,7 @@
     return h('div', { class: 'seg-card' }, [
       h('div', { class: 'seg-role-row' }, [
         h('span', { class: 'seg-role', text: 'Flight' }),
-        h('button', { type: 'button', class: 'seg-card-rm', title: 'Remove flight', onclick: function (e) { var c = document.getElementById('inv-segs'); if (c.querySelectorAll('.seg-card').length > 1) { e.target.closest('.seg-card').remove(); relabelSegs(); } }, text: '×' })
+        h('button', { type: 'button', class: 'seg-card-rm', title: 'Remove flight', onclick: function (e) { var list = e.target.closest('.inv-segs'); if (list && list.querySelectorAll('.seg-card').length > 1) { e.target.closest('.seg-card').remove(); renumberLegs(list); } }, text: '×' })
       ]),
       h('input', { type: 'hidden', class: 'seg-aircraft', value: (seg && seg.aircraft) || '' }),
       h('input', { type: 'hidden', class: 'seg-duration', value: (seg && seg.duration) || '' }),
@@ -1113,6 +1113,13 @@
     }
     relabelSegs(); initDatePickers(c);
   }
+  /* renumber flight cards inside one list; the global builder list keeps its richer labels */
+  function renumberLegs(list) {
+    if (!list) return;
+    if (list.id === 'inv-segs') { relabelSegs(); return; }
+    var cards = list.querySelectorAll('.seg-card');
+    Array.prototype.forEach.call(cards, function (c, i) { var r = c.querySelector('.seg-role'); if (r) r.textContent = cards.length > 1 ? 'Flight ' + (i + 1) : 'Flight'; });
+  }
   function relabelSegs() {
     var typeEl = document.getElementById('trip-type');
     var cards = document.querySelectorAll('#inv-segs .seg-card');
@@ -1179,36 +1186,38 @@
     if (d.distance_km) { var dk = card.querySelector('.seg-distance'); if (dk) dk.value = d.distance_km; }
     /* fresh times may change the layover on this leg and the one after it */
     var cbThis = card.querySelector('.seg-connect-cb'); if (cbThis && cbThis.checked) autoLayover(card);
-    var cards = Array.prototype.slice.call(document.querySelectorAll('#inv-segs .seg-card')); var ni = cards.indexOf(card) + 1;
+    var listEl = card.closest('.inv-segs'); var cards = listEl ? Array.prototype.slice.call(listEl.querySelectorAll('.seg-card')) : []; var ni = cards.indexOf(card) + 1;
     if (ni > 0 && ni < cards.length) { var nc = cards[ni], cbN = nc.querySelector('.seg-connect-cb'); if (cbN && cbN.checked) autoLayover(nc); }
     var route = (d.from_iata || '?') + ' → ' + (d.to_iata || '?');
     var extra = [toHHMM(d.depart_time) && toHHMM(d.arrive_time) ? (toHHMM(d.depart_time) + '–' + toHHMM(d.arrive_time)) : '', d.duration].filter(Boolean).join(' · ');
     setLk(status, 'Filled — ' + [d.airline, route, extra].filter(Boolean).join(' · '), 'ok');
   }
-  function readSegments() {
-    var segs = [];
-    Array.prototype.forEach.call(document.querySelectorAll('#inv-segs .seg-card'), function (card) {
-      var w = card.querySelectorAll('.ap-wrap'), f = w[0] && w[0]._selected, t = w[1] && w[1]._selected;
-      if (!f || !t) return;
-      var airline = ((card.querySelector('.seg-airline') || {}).value || '').trim();
-      var cabinEl = card.querySelector('.ss input[type=hidden]'), cabin = cabinEl ? cabinEl.value : '';
-      var dt = (card.querySelector('.seg-date') || {}).value || '';
-      var fn = ((card.querySelector('.seg-flightno') || {}).value || '').trim();
-      var dpt = (card.querySelector('.seg-deptime') || {}).value || '', art = (card.querySelector('.seg-arrtime') || {}).value || '', acf = (card.querySelector('.seg-aircraft') || {}).value || '', dur = (card.querySelector('.seg-duration') || {}).value || '';
-      var seg = { airline: airline || null, flight_number: fn || null, cabin: cabin || null, from: f, to: t, depart_date: dt || null, depart_time: dpt || null, arrive_time: art || null, aircraft: acf || null, duration: dur || null };
-      function pick(cls, key) { var el = card.querySelector(cls); if (el) { var v = (el.value || '').trim(); if (v) seg[key] = v; } }
-      pick('.seg-seats', 'seats'); pick('.seg-layover-note', 'layover_note'); pick('.seg-conf', 'confirmation'); pick('.seg-opby', 'operated_by'); pick('.seg-depterm', 'dep_terminal'); pick('.seg-arrterm', 'arr_terminal'); pick('.seg-bag', 'baggage'); pick('.seg-notes', 'notes');
-      var dist = parseInt((card.querySelector('.seg-distance') || {}).value, 10); if (dist > 0) seg.distance_km = dist;
-      var cb = card.querySelector('.seg-connect-cb');
-      if (cb && cb.checked && segs.length > 0) {
-        seg.connect_from_prev = true;
-        var kd = (card.querySelector('.seg-layover-kind') || {}).value || ''; if (kd) seg.layover_kind = kd;
-        var ld = ((card.querySelector('.seg-layover-dur') || {}).value || '').trim(); if (ld) seg.layover_duration = ld;
-      }
-      segs.push(seg);
-    });
+  function readSeg(card, isFirst) {
+    var w = card.querySelectorAll('.ap-wrap'), f = w[0] && w[0]._selected, t = w[1] && w[1]._selected;
+    if (!f || !t) return null;
+    var airline = ((card.querySelector('.seg-airline') || {}).value || '').trim();
+    var cabinEl = card.querySelector('.ss input[type=hidden]'), cabin = cabinEl ? cabinEl.value : '';
+    var dt = (card.querySelector('.seg-date') || {}).value || '';
+    var fn = ((card.querySelector('.seg-flightno') || {}).value || '').trim();
+    var dpt = (card.querySelector('.seg-deptime') || {}).value || '', art = (card.querySelector('.seg-arrtime') || {}).value || '', acf = (card.querySelector('.seg-aircraft') || {}).value || '', dur = (card.querySelector('.seg-duration') || {}).value || '';
+    var seg = { airline: airline || null, flight_number: fn || null, cabin: cabin || null, from: f, to: t, depart_date: dt || null, depart_time: dpt || null, arrive_time: art || null, aircraft: acf || null, duration: dur || null };
+    function pick(cls, key) { var el = card.querySelector(cls); if (el) { var v = (el.value || '').trim(); if (v) seg[key] = v; } }
+    pick('.seg-seats', 'seats'); pick('.seg-layover-note', 'layover_note'); pick('.seg-conf', 'confirmation'); pick('.seg-opby', 'operated_by'); pick('.seg-depterm', 'dep_terminal'); pick('.seg-arrterm', 'arr_terminal'); pick('.seg-bag', 'baggage'); pick('.seg-notes', 'notes');
+    var dist = parseInt((card.querySelector('.seg-distance') || {}).value, 10); if (dist > 0) seg.distance_km = dist;
+    var cb = card.querySelector('.seg-connect-cb');
+    if (cb && cb.checked && !isFirst) {
+      seg.connect_from_prev = true;
+      var kd = (card.querySelector('.seg-layover-kind') || {}).value || ''; if (kd) seg.layover_kind = kd;
+      var ld = ((card.querySelector('.seg-layover-dur') || {}).value || '').trim(); if (ld) seg.layover_duration = ld;
+    }
+    return seg;
+  }
+  function readLegsFrom(container) {
+    var segs = []; if (!container) return segs;
+    Array.prototype.forEach.call(container.querySelectorAll('.seg-card'), function (card, i) { var s = readSeg(card, i === 0); if (s) segs.push(s); });
     return segs;
   }
+  function readSegments() { return readLegsFrom(document.getElementById('inv-segs')); }
   function flightDesc(s) {
     var head = [s.airline, s.cabin].filter(Boolean).join(' ');
     var route = s.from.city + ' (' + s.from.code + ') to ' + s.to.city + ' (' + s.to.code + ')';
@@ -2252,24 +2261,43 @@
   function tabItin() {
     var wrap = h('div');
     if (state.itinView === 'review' && state.itinDraft) { wrap.appendChild(mainHead('Review itinerary', 'Check everything, then send it to the customer.')); wrap.appendChild(h('div', { class: 'main-body' }, [reviewItin(state.itinDraft)])); return wrap; }
+    if (state.itinView === 'list') {
+      wrap.appendChild(mainHead('Sent itineraries', 'View or edit any itinerary you’ve sent.'));
+      var lb = h('div', { class: 'main-body' });
+      lb.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-bottom:18px', onclick: function () { state.itinView = 'form'; renderTab(); }, text: '← New itinerary' }));
+      lb.appendChild(h('div', { id: 'sentitin-list' }, [h('div', { class: 'dash-loading', text: 'Loading itineraries…' })]));
+      wrap.appendChild(lb); setTimeout(loadSentItins, 0); return wrap;
+    }
     restoreDraftForCustomer();
     var editing = !!(state.itinDraft && state.itinDraft.editing_id);
     wrap.appendChild(mainHead(editing ? 'Edit itinerary' : 'New itinerary', editing ? 'Update the trip — it replaces the version in their account.' : 'Build the trip — flights, hotels, transport and experiences. It appears in their account.'));
     var body = h('div', { class: 'main-body' });
     if (state.itinFlash) { body.appendChild(flashEl(state.itinFlash, true)); state.itinFlash = null; }
-    var il = h('div', { id: 'sentitin-box' }); body.appendChild(il); setTimeout(loadSentItins, 0);
+    body.appendChild(sentItinsBar());
     body.appendChild(itinForm(state.itinDraft));
     wrap.appendChild(body); return wrap;
   }
+  function sentItinsBar() {
+    var bar = h('div', { class: 'sent-bar' }, [
+      h('div', { class: 'sent-bar-main' }, [h('span', { class: 'sent-bar-label', text: 'Sent itineraries' }), h('span', { class: 'sent-bar-count', id: 'sentitin-count', text: '' })]),
+      h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto', onclick: function () { state.itinView = 'list'; renderTab(); }, text: 'View all' })
+    ]);
+    setTimeout(loadSentItinCount, 0);
+    return bar;
+  }
+  async function loadSentItinCount() {
+    var el = document.getElementById('sentitin-count'); if (!el) return;
+    var r = await sb.from('itineraries').select('id', { count: 'exact', head: true });
+    el = document.getElementById('sentitin-count'); if (!el) return;
+    el.textContent = (r.count != null ? r.count : 0);
+  }
   async function loadSentItins() {
-    var box = document.getElementById('sentitin-box'); if (!box) return;
-    var r = await sb.from('itineraries').select('*').order('created_at', { ascending: false }).limit(25);
-    box = document.getElementById('sentitin-box'); if (!box) return;
+    var box = document.getElementById('sentitin-list'); if (!box) return;
+    var r = await sb.from('itineraries').select('*').order('created_at', { ascending: false }).limit(200);
+    box = document.getElementById('sentitin-list'); if (!box) return;
     var rows = r.data || []; box.textContent = '';
-    if (!rows.length) return;
-    box.appendChild(h('div', { class: 'sq-wrap' }, [
-      h('div', { class: 'sq-head-row' }, [h('h3', { class: 'sq-h', text: 'Sent itineraries · ' + rows.length })])
-    ].concat(rows.map(itinListRow))));
+    if (!rows.length) { box.appendChild(h('div', { class: 'pkg-empty', text: 'No itineraries sent yet.' })); return; }
+    box.appendChild(h('div', { class: 'sq-wrap' }, rows.map(itinListRow)));
   }
   function itinListRow(row) {
     var cust = findCustomerForDoc(row);
@@ -2761,12 +2789,25 @@
     return b.length ? '  ·  ' + b.join(' · ') : '';
   }
   function gtPodPax(travelers) { var n = (travelers || '').split(/[\n,]+/).map(function (x) { return x.trim(); }).filter(Boolean).length; return n || 1; }
+  /* a self-contained (class-scoped, no shared IDs) flight list so a pod can have TWO of them */
+  function podLegs(kind, segs) {
+    var list = h('div', { class: 'inv-segs', 'data-leg': kind }, (segs && segs.length ? segs : [null]).map(segRow));
+    var add = h('button', { type: 'button', class: 'inv-addline', text: '+ Add flight' });
+    add.addEventListener('click', function () { var r = segRow(); list.appendChild(r); renumberLegs(list); initDatePickers(r); });
+    setTimeout(function () { renumberLegs(list); }, 0);
+    return h('div', { class: 'flights-wrap' }, [list, add]);
+  }
+  function gtHubCode() { var s = state.gt.shared.segments || []; return s[0] && s[0].from && s[0].from.code; }
+  function podOut(pod) { return pod.out_segments || (pod.segments ? gtSplitPod(pod.segments, gtHubCode()).out : []); }
+  function podRet(pod) { return pod.ret_segments || (pod.segments ? gtSplitPod(pod.segments, gtHubCode()).ret : []); }
   function gtPodCard(pod, i) {
-    var route = gtSharedRoute(pod.segments) || 'No flights yet', pax = gtPodPax(pod.travelers);
+    var pax = gtPodPax(pod.travelers);
+    var outR = gtSharedRoute(podOut(pod)), retR = gtSharedRoute(podRet(pod));
+    var routes = [outR ? 'Out  ' + outR : '', retR ? 'Home  ' + retR : ''].filter(Boolean).join('      ·      ') || 'No flights yet';
     return h('div', { class: 'pkg-card' }, [
       h('div', { class: 'pkg-card-main' }, [
         h('div', { class: 'pkg-card-name', text: pod.label || ('City group ' + (i + 1)) }),
-        h('div', { class: 'pkg-card-sub', text: route }),
+        h('div', { class: 'pkg-card-sub', text: routes }),
         pod.travelers ? h('div', { class: 'gt-pod-travelers', text: pax + ' traveller' + (pax > 1 ? 's' : '') + ': ' + pod.travelers.split(/[\n,]+/).map(function (x) { return x.trim(); }).filter(Boolean).join(', ') }) : null
       ]),
       h('div', { class: 'pkg-card-actions' }, [
@@ -2793,7 +2834,7 @@
     if (!g.pods.length) list.appendChild(h('div', { class: 'pkg-empty', text: 'No city groups yet. Add the first one below.' }));
     g.pods.forEach(function (pod, i) { list.appendChild(gtPodCard(pod, i)); });
     body.appendChild(list);
-    body.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-top:6px', onclick: function () { g.podDraft = { label: '', travelers: '', segments: [] }; g.podIndex = null; g.view = 'podedit'; renderTab(); }, text: '+ Add city group' }));
+    body.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-top:6px', onclick: function () { g.podDraft = { label: '', title: '', travelers: '', out_segments: [], ret_segments: [] }; g.podIndex = null; g.view = 'podedit'; renderTab(); }, text: '+ Add city group' }));
     body.appendChild(h('div', { class: 'gt-generate' }, [
       h('div', { id: 'gt-msg', class: 'msg', style: 'display:none' }),
       h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto', onclick: function (e) { gtSaveOnly(e.target); }, text: 'Save without generating' }),
@@ -2803,20 +2844,26 @@
   }
   function gtPodEditView() {
     state.gtBuilding = true;
-    var g = state.gt, pod = g.podDraft || { label: '', travelers: '', segments: [] }, wrap = h('div');
-    wrap.appendChild(mainHead(g.podIndex == null ? 'New city group' : 'Edit city group', 'Their own flights to the meeting point and home. The shared journey is inserted in the middle automatically.'));
+    var g = state.gt, pod = g.podDraft || { label: '', title: '', travelers: '', out_segments: [], ret_segments: [] }, wrap = h('div');
+    wrap.appendChild(mainHead(g.podIndex == null ? 'New city group' : 'Edit city group', 'This group has its own departure and return city. The shared journey is inserted in the middle automatically.'));
     var body = h('div', { class: 'main-body' });
-    var segs = (pod.segments && pod.segments.length) ? pod.segments : [null, null];
+    var sharedR = gtSharedRoute(g.shared.segments), meet = sharedR ? sharedR.split(' → ')[0] : 'the meeting point';
     var form = h('form', { class: 'inv-form', onsubmit: function (e) { e.preventDefault(); gtSavePod(); } }, [
       h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'City group' }),
-        invField('Label', 'gt-pod-label', 'text', 'e.g. Houston travelers', pod.label),
+        h('div', { class: 'inv-row2', style: 'margin-bottom:16px' }, [invField('Label (for your list)', 'gt-pod-label', 'text', 'e.g. Houston travelers', pod.label), invField('Itinerary title (optional)', 'gt-pod-title', 'text', 'Defaults to the trip title', pod.title)]),
         h('label', { class: 'inv-field' }, [h('span', { text: 'Travellers (one per line, or comma-separated)' }), h('textarea', { id: 'gt-pod-travelers', class: 'inv-input inv-textarea', rows: '3', placeholder: 'e.g.\nMr Ahmed Loya\nMrs Loya', value: pod.travelers || '' })])
       ]),
       h('div', { class: 'inv-section' }, [
-        h('h3', { class: 'inv-h3', text: 'Their flights to and from home' }),
-        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'List their own flights in order: first their flight to the meeting point, then their flight home. The shared journey is slotted in between automatically.' }),
-        flightsSection(segs, null, { plain: true })
+        h('h3', { class: 'inv-h3', text: 'Departure — getting there' }),
+        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Their flight(s) from their home city to ' + meet + ', where the group meets.' }),
+        podLegs('out', podOut(pod))
+      ]),
+      h('div', { class: 'gt-mid-note' }, [h('span', { class: 'gt-mid-line' }), h('span', { class: 'gt-mid-text', text: sharedR ? 'Everyone shares  ·  ' + sharedR : 'The shared journey goes here' }), h('span', { class: 'gt-mid-line' })]),
+      h('div', { class: 'inv-section' }, [
+        h('h3', { class: 'inv-h3', text: 'Return — heading home' }),
+        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Their flight(s) from ' + meet + ' back to their home city.' }),
+        podLegs('ret', podRet(pod))
       ]),
       h('div', { class: 'inv-submit' }, [
         h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:13px 24px', onclick: function () { g.view = 'pods'; g.podDraft = null; g.podIndex = null; renderTab(); }, text: 'Cancel' }),
@@ -2825,15 +2872,17 @@
       ])
     ]);
     body.appendChild(form); wrap.appendChild(body);
-    setTimeout(function () { relabelSegs(); initDatePickers(form); }, 0);
+    setTimeout(function () { initDatePickers(form); }, 0);
     return wrap;
   }
   function gtSavePod() {
     var g = state.gt, msg = document.getElementById('gt-pod-msg');
-    var label = val('gt-pod-label'), travelers = ((document.getElementById('gt-pod-travelers') || {}).value || '').trim(), segments = readSegments();
+    var label = val('gt-pod-label'), title = val('gt-pod-title'), travelers = ((document.getElementById('gt-pod-travelers') || {}).value || '').trim();
+    var outSegs = readLegsFrom(document.querySelector('.inv-segs[data-leg="out"]'));
+    var retSegs = readLegsFrom(document.querySelector('.inv-segs[data-leg="ret"]'));
     if (!label) { showInvMsg(msg, 'Give this city group a label (e.g. “Houston travelers”).', 'err'); return; }
-    if (!segments.length) { showInvMsg(msg, 'Add at least their outbound flight (a From and To).', 'err'); return; }
-    var pod = { label: label, travelers: travelers, segments: segments };
+    if (!outSegs.length && !retSegs.length) { showInvMsg(msg, 'Add at least their departure flight (a From and To).', 'err'); return; }
+    var pod = { label: label, title: title || null, travelers: travelers, out_segments: outSegs, ret_segments: retSegs };
     if (g.podIndex == null) g.pods.push(pod); else g.pods[g.podIndex] = pod;
     g.podDraft = null; g.podIndex = null; g.view = 'pods'; renderTab();
   }
@@ -2885,15 +2934,13 @@
     var gtId; try { gtId = await gtPersist(owner); } catch (e) { gtId = null; }
     if (!gtId) { if (btn) { btn.disabled = false; btn.textContent = 'Generate itineraries'; } err('Could not save the group trip.'); return; }
     try { await sb.from('itineraries').delete().eq('group_trip_id', gtId); } catch (e) { }
-    var hub = g.shared.segments[0] && g.shared.segments[0].from && g.shared.segments[0].from.code;
     var rows = g.pods.map(function (pod) {
-      var sp = gtSplitPod(pod.segments, hub);
-      var composed = sp.out.concat(g.shared.segments || [], sp.ret);
+      var composed = podOut(pod).concat(g.shared.segments || [], podRet(pod));
       var dates = gtComposedDates(composed), pax = gtPodPax(pod.travelers);
       return {
         customer_email: owner.customer_email, account_number: owner.account_number, user_id: owner.user_id,
         group_id: owner.group_id, group_trip_id: gtId, traveler_names: pod.travelers || null,
-        title: (g.title ? g.title + ' · ' + pod.label : pod.label), destination: g.destination || null, trip_type: 'multi',
+        title: (pod.title || (g.title ? g.title + ' · ' + pod.label : pod.label)), destination: g.destination || null, trip_type: 'multi',
         start_date: g.start_date || dates.start, end_date: g.end_date || dates.end,
         passengers: pax, pax_adults: pax, pax_children: 0, pax_infants: 0,
         segments: composed, hotels: g.shared.hotels || [], transport: g.shared.transport || [], entertainment: g.shared.entertainment || [],
