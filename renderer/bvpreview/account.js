@@ -556,7 +556,7 @@
   }
   function openOverlay(docNode, filename, pdfOpt) {
     closeOverlay();
-    var overlay = h('div', { class: 'acct-overlay', id: 'acct-overlay' });
+    var overlay = h('div', { class: 'acct-overlay', id: 'acct-overlay', 'data-lenis-prevent': '' });
     overlay.addEventListener('click', function (e) { if (e.target === overlay) closeOverlay(); });
     overlay.appendChild(h('div', { class: 'acct-modal' }, [
       h('div', { class: 'acct-modal-bar no-print' }, [

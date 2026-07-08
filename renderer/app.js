@@ -1257,9 +1257,9 @@
     }
     return seg;
   }
-  function readLegsFrom(container) {
+  function readLegsFrom(container, firstCanConnect) {
     var segs = []; if (!container) return segs;
-    Array.prototype.forEach.call(container.querySelectorAll('.seg-card'), function (card, i) { var s = readSeg(card, i === 0); if (s) segs.push(s); });
+    Array.prototype.forEach.call(container.querySelectorAll('.seg-card'), function (card, i) { var s = readSeg(card, i === 0 && !firstCanConnect); if (s) segs.push(s); });
     return segs;
   }
   function readSegments() { return readLegsFrom(document.getElementById('inv-segs')); }
@@ -2828,7 +2828,9 @@
     g.currency = val('itin-cur') || g.currency || 'USD'; g.price_invoice_number = val('itin-pull-inv') || null;
     g.notes = val('gt-notes');
     if (document.getElementById('inv-segs')) {
-      g.shared = { segments: readSegments(), trip_type: readTripType(), hotels: readCards('itin-hotels', 'hotel'), transport: readCards('itin-transport', 'transport'), entertainment: readCards('itin-dining', 'dining').concat(readCards('itin-ent', 'ent')) };
+      /* firstCanConnect: the first shared flight (e.g. Istanbul -> Destination 1) may be marked a
+         connection, because after generation it follows each group's arrival into the meeting city */
+      g.shared = { segments: readLegsFrom(document.getElementById('inv-segs'), true), trip_type: readTripType(), hotels: readCards('itin-hotels', 'hotel'), transport: readCards('itin-transport', 'transport'), entertainment: readCards('itin-dining', 'dining').concat(readCards('itin-ent', 'ent')) };
     }
   }
   function gtSetupView() {

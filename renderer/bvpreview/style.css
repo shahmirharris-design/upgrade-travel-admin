@@ -1909,7 +1909,7 @@ html.acct-modal-open, body.acct-modal-open{ overflow:hidden; }
 .bv-conf-img{ display:block; width:auto; max-width:200px; max-height:200px; border-radius:10px; background:#fff; padding:10px; cursor:zoom-in; box-shadow:0 8px 24px -14px rgba(0,0,0,.6); }
 .bv-conf-hint{ font-size:11px; color:var(--bv-muted,#A8987B); margin-top:6px; }
 .bv-lightbox{ position:fixed; inset:0; z-index:2000; background:rgba(10,7,3,.92); display:flex; align-items:center; justify-content:center; padding:24px; cursor:zoom-out; }
-.bv-lightbox img{ max-width:92vw; max-height:92vh; border-radius:12px; background:#fff; padding:16px; }
+.bv-lightbox img{ width:min(90vw,620px); height:auto; max-height:90vh; object-fit:contain; border-radius:14px; background:#fff; padding:22px; image-rendering:pixelated; }
 .ld-conf{ margin-top:14px; }
 .ld-conf-k{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:#7A5E29; font-weight:700; margin-bottom:6px; }
 .ld-conf-img{ display:block; width:auto; max-width:180px; max-height:180px; border:1px solid #E7DCC4; border-radius:8px; background:#fff; padding:8px; break-inside:avoid; }
