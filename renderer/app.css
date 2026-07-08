@@ -760,3 +760,5 @@ input{ font-family:inherit; }
 .gt-subsec{ margin-top:18px; padding-top:16px; border-top:1px solid var(--line); }
 .gt-subsec-h{ font-size:13.5px; font-weight:600; color:var(--ink); margin:0 0 10px; }
 .gt-fieldlbl{ display:block; font-size:12.5px; font-weight:500; color:var(--ink-2); margin-bottom:8px; }
+
+.bag-legacy{ font-size:12px; color:var(--stone); font-style:italic; margin:2px 0 8px; }

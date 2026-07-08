@@ -1114,8 +1114,11 @@
       rows.appendChild(row);
     }
     bagList(value).forEach(addRow);
+    var legacy = (typeof value === 'string' && value.trim()) ? value.trim() : '';
     return h('div', { class: 'inv-field bag-wrap' }, [
       h('span', { text: 'Baggage allowance' }),
+      legacy ? h('p', { class: 'bag-legacy', text: 'Currently: “' + legacy + '” — kept as-is unless you add rows below.' }) : null,
+      legacy ? h('input', { type: 'hidden', class: 'bag-legacy-keep', value: legacy }) : null,
       h('div', { class: 'bag-head' }, [h('span', { text: 'Type' }), h('span', { text: 'Qty' }), h('span', { text: 'Weight' }), h('span', { text: 'Unit' }), h('span')]),
       rows,
       h('button', { type: 'button', class: 'inv-addline bag-add', onclick: function () { addRow(); }, text: '+ Add baggage' })
@@ -1181,6 +1184,10 @@
         h('div', { class: 'inv-row2', style: 'margin-top:12px' }, [
           richField('Confirmation / PNR', 'seg-conf', seg && seg.confirmation, 'Booking reference'),
           richField('Operated by — ONLY if a different airline flies it', 'seg-opby', seg && seg.operated_by, 'Leave blank unless codeshare')
+        ]),
+        h('div', { class: 'inv-row2', style: 'margin-top:12px' }, [
+          h('label', { class: 'inv-field' }, [h('span', { text: 'Arrival date — only if it lands a different day' }), h('input', { class: 'inv-input seg-arrdate', type: 'date', value: (seg && seg.arrive_date) || '' })]),
+          richField('E-ticket numbers', 'seg-etkt', seg && seg.eticket, 'e.g. 235-1234567890 · 235-1234567891')
         ]),
         h('div', { class: 'inv-row3', style: 'margin-top:12px' }, [
           richField('Dep. terminal', 'seg-depterm', seg && seg.dep_terminal, 'e.g. 3'),
@@ -1300,6 +1307,16 @@
     /* rich (itinerary/package) legs also carry terminals — fill only if empty so we never stomp a manual edit */
     var setIfEmpty = function (cls, v) { var el = card.querySelector(cls); if (el && v && !(el.value || '').trim()) el.value = v; };
     setIfEmpty('.seg-depterm', d.dep_terminal); setIfEmpty('.seg-arrterm', d.arr_terminal);
+    /* overnight arrivals: the API returns full local datetimes, so fill the arrival DATE when it differs */
+    var arrDateM = ('' + (d.arrive_time || '')).match(/^(\d{4}-\d{2}-\d{2})/);
+    var segDate = (card.querySelector('.seg-date') || {}).value || '';
+    if (arrDateM && segDate && arrDateM[1] !== segDate) {
+      var adEl = card.querySelector('.seg-arrdate');
+      if (adEl && !(adEl.value || '').trim()) {
+        if (adEl._flatpickr) { try { adEl._flatpickr.setDate(arrDateM[1], false); } catch (e2) { adEl.value = arrDateM[1]; } }
+        else adEl.value = arrDateM[1];
+      }
+    }
     if (d.distance_km) { var dk = card.querySelector('.seg-distance'); if (dk) dk.value = d.distance_km; }
     /* fresh times may change the layover on this leg and the one after it */
     var cbThis = card.querySelector('.seg-connect-cb'); if (cbThis && cbThis.checked) autoLayover(card);
@@ -1323,7 +1340,10 @@
     var pendSeat = ((card.querySelector('.seg-seats-wrap .seat-input') || {}).value || '').trim(); if (pendSeat) seats.push(pendSeat.toUpperCase());
     if (seats.length) seg.seats = seats;
     pick('.seg-layover-note', 'layover_note'); pick('.seg-conf', 'confirmation'); pick('.seg-opby', 'operated_by'); pick('.seg-depterm', 'dep_terminal'); pick('.seg-arrterm', 'arr_terminal'); pick('.seg-notes', 'notes');
-    var bags = readBaggage(card); if (bags.length) seg.baggage = bags;
+    pick('.seg-arrdate', 'arrive_date'); pick('.seg-etkt', 'eticket');
+    var bags = readBaggage(card);
+    if (bags.length) seg.baggage = bags;
+    else { var lb = ((card.querySelector('.bag-legacy-keep') || {}).value || '').trim(); if (lb) seg.baggage = lb; /* old free-text baggage survives an edit untouched */ }
     var dist = parseInt((card.querySelector('.seg-distance') || {}).value, 10); if (dist > 0) seg.distance_km = dist;
     var cb = card.querySelector('.seg-connect-cb');
     if (cb && cb.checked && !isFirst) {
@@ -2064,8 +2084,11 @@
     var lines = (d.line_items && d.line_items.length) ? d.line_items : [null];
     var custBox = h('div', { id: 'inv-cust', class: 'inv-cust' });
     var pricingRow2 = state.docKind === 'quote'
-      ? h('div', { class: 'inv-row2' }, [invField('Valid until (optional)', 'inv-valid', 'date', '', d.valid_until), h('div')])
-      : h('div', { class: 'inv-row2' }, [invField('Deposit paid (optional)', 'inv-deposit', 'number', '0.00', d.deposit_paid), invField('Balance due by (optional)', 'inv-due', 'date', '', d.due_date)]);
+      ? h('div', { class: 'inv-row2' }, [invField('Valid until', 'inv-valid', 'date', '', d.valid_until || (!d.editing_id ? addDays(todayISO(), (state.settings && parseInt(state.settings.quote_validity_days, 10)) || 14) : '')), h('div')])
+      : h('div', { class: 'inv-row2' }, [
+          h('label', { class: 'inv-field' }, [h('span', { text: 'Deposit paid (optional)' }), h('div', { class: 'itin-pull-row' }, [invInput('inv-deposit', 'number', '0.00', d.deposit_paid), (state.settings && parseFloat(state.settings.deposit_pct) > 0) ? h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:0 14px; height:46px; white-space:nowrap', title: 'Fill from the default deposit percentage', onclick: fillDepositPct, text: parseFloat(state.settings.deposit_pct) + '%' }) : null])]),
+          invField('Balance due by (optional)', 'inv-due', 'date', '', d.due_date)
+        ]);
     var costRow = state.docKind === 'invoice'
       ? h('div', { class: 'inv-row2' }, [
           h('label', { class: 'inv-field' }, [h('span', { text: 'Your cost — net fare (private)' }), h('input', { id: 'inv-cost', class: 'inv-input', type: 'number', step: '0.01', min: '0', placeholder: '0.00', value: d.net_cost != null ? d.net_cost : '', oninput: recalc })]),
@@ -2107,6 +2130,14 @@
     ]);
     setTimeout(function () { if (state.docCustomer) renderResolved(state.docCustomer); recalc(); loadTemplates(); applyTripType(detectTripType(d)); }, 0);
     return form;
+  }
+  function fillDepositPct() {
+    var pct = (state.settings && parseFloat(state.settings.deposit_pct)) || 0; if (!pct) return;
+    var total = 0;
+    Array.prototype.forEach.call(document.querySelectorAll('#inv-lines .inv-line-amt'), function (el) { var v = parseFloat(el.value); if (!isNaN(v)) total += v; });
+    var dep = document.getElementById('inv-deposit'); if (!dep) return;
+    dep.value = (Math.round(total * pct) / 100).toFixed(2);
+    recalc();
   }
   function recalc() {
     var total = 0;
@@ -2214,6 +2245,7 @@
 
   /* ---------- itineraries ---------- */
   var TRANSPORT_TYPES = ['Chauffeur', 'Private transfer', 'Car service', 'Car rental', 'Train', 'Yacht / boat', 'Helicopter', 'Other'];
+  var BOARD_TYPES = ['Not specified', 'Room only', 'Bed & breakfast', 'Half board', 'Full board', 'All-inclusive'];
   var DINING_CATEGORIES = ['Restaurant', 'Fine dining', 'Bar', 'Lounge', 'Café', 'Other'];
   var ENT_CATEGORIES = ['Show / theatre', 'Tour', 'Experience', 'Spa', 'Event', 'Other'];
   function fmtTime(t) { if (!t) return ''; var m = ('' + t).match(/^(\d{1,2}):(\d{2})/); if (!m) return t; var hh = +m[1], ap = hh >= 12 ? 'pm' : 'am', h12 = hh % 12 || 12; return h12 + ':' + m[2] + ' ' + ap; }
@@ -2432,6 +2464,11 @@
       addrField('Address', 'h-address', x && x.address, 'Auto-fills, or click to pick a location', 'h-name', 'h-location'),
       h('div', { class: 'inv-row2' }, [cdt('Check-in', 'h-cin-date', 'h-cin-time', x && x.checkin_date, x && x.checkin_time), cdt('Check-out', 'h-cout-date', 'h-cout-time', x && x.checkout_date, x && x.checkout_time)]),
       h('div', { class: 'inv-row2' }, [clabel('Room / suite', 'h-room', x && x.room, 'e.g. Royal Suite'), clabel('Confirmation no.', 'h-conf', x && x.confirmation, 'Optional')]),
+      h('div', { class: 'inv-row3' }, [
+        h('label', { class: 'inv-field' }, [h('span', { text: 'Meals included' }), h('div', { class: 'h-board-wrap' }, [styledSelect(null, (x && x.board) || 'Not specified', BOARD_TYPES, null)])]),
+        clabel('Rooms', 'h-rooms', x && x.rooms, 'e.g. 2 × Deluxe · 1 × Suite'),
+        clabel('Hotel phone', 'h-phone', x && x.phone, 'Optional')
+      ]),
       clabel('Notes', 'h-notes', x && x.notes, 'Optional'),
       confField(x)
     ]);
@@ -2442,6 +2479,7 @@
       h('div', { class: 'inv-row2' }, [poiField('From / pickup', 't-from', x && x.from, 'e.g. DXB Airport', null), poiField('To / dropoff', 't-to', x && x.to, 'e.g. Burj Al Arab', null)]),
       h('p', { class: 'itin-opthint', text: 'Driver details — optional. Anything left blank is hidden from the customer.' }),
       h('div', { class: 'inv-row3' }, [clabel('Driver name', 't-driver', x && x.driver, 'Optional'), clabel('Car', 't-car', x && x.car, 'e.g. Mercedes S-Class'), clabel('License plate', 't-plate', x && x.plate, 'Optional')]),
+      h('div', { class: 'inv-row3' }, [clabel('Provider / company', 't-company', x && x.company, 'e.g. Blacklane'), clabel('Provider phone', 't-phone', x && x.phone, 'Optional'), clabel('Confirmation no.', 't-conf', x && x.confirmation, 'Optional')]),
       clabel('Notes', 't-notes', x && x.notes, 'Optional'),
       confField(x)
     ]);
@@ -2451,6 +2489,7 @@
       h('div', { class: 'inv-row2' }, [poiField('Name', 'e-name', x && x.name, 'e.g. Nobu Dubai', function (p, inp) { fillFromPoi(p, inp, 'e-location', 'e-address'); }, 'e-location'), h('label', { class: 'inv-field' }, [h('span', { text: 'Type' }), styledSelect(null, (x && x.category) || 'Restaurant', DINING_CATEGORIES, null)])]),
       h('div', { class: 'inv-row2' }, [cityField('City', 'e-location', x && x.location, 'Start typing a city…'), cdt('Date & time', 'e-date', 'e-time', x && x.date, x && x.time)]),
       addrField('Address', 'e-address', x && x.address, 'Auto-fills, or click to pick a location', 'e-name', 'e-location'),
+      h('div', { class: 'inv-row3' }, [clabel('Confirmation no.', 'e-conf', x && x.confirmation, 'Optional'), clabel('Party size', 'e-party', x && x.party, 'e.g. 15'), clabel('Venue phone', 'e-phone', x && x.phone, 'Optional')]),
       clabel('Notes', 'e-notes', x && x.notes, 'Optional'),
       confField(x)
     ]);
@@ -2460,6 +2499,7 @@
       h('div', { class: 'inv-row2' }, [poiField('Name', 'e-name', x && x.name, 'e.g. Desert safari', function (p, inp) { fillFromPoi(p, inp, 'e-location', 'e-address'); }, 'e-location'), h('label', { class: 'inv-field' }, [h('span', { text: 'Category' }), styledSelect(null, (x && x.category) || 'Experience', ENT_CATEGORIES, null)])]),
       h('div', { class: 'inv-row2' }, [cityField('City', 'e-location', x && x.location, 'Start typing a city…'), cdt('Date & time', 'e-date', 'e-time', x && x.date, x && x.time)]),
       addrField('Address', 'e-address', x && x.address, 'Auto-fills, or click to pick a location', 'e-name', 'e-location'),
+      h('div', { class: 'inv-row3' }, [clabel('Confirmation no.', 'e-conf', x && x.confirmation, 'Optional'), clabel('Party size', 'e-party', x && x.party, 'e.g. 15'), clabel('Venue phone', 'e-phone', x && x.phone, 'Optional')]),
       clabel('Notes', 'e-notes', x && x.notes, 'Optional'),
       confField(x)
     ]);
@@ -2469,9 +2509,9 @@
     Array.prototype.forEach.call(document.querySelectorAll('#' + containerId + ' .itin-card'), function (c) {
       var img = ((c.querySelector('.card-img-url') || {}).value || '').trim() || null;
       var conf = ((c.querySelector('.e-conf-img') || {}).value || '').trim() || null;
-      if (type === 'hotel') { var n = vcard(c, '.h-name'); if (!n) return; arr.push({ name: n, location: vcard(c, '.h-location'), address: vcard(c, '.h-address'), checkin_date: vcard(c, '.h-cin-date') || null, checkin_time: vcard(c, '.h-cin-time') || null, checkout_date: vcard(c, '.h-cout-date') || null, checkout_time: vcard(c, '.h-cout-time') || null, room: vcard(c, '.h-room'), confirmation: vcard(c, '.h-conf'), notes: vcard(c, '.h-notes'), image_url: img, confirmation_image: conf }); }
-      else if (type === 'transport') { var hasAny = vcard(c, '.t-from') || vcard(c, '.t-to') || vcard(c, '.t-date'); if (!hasAny) return; var tt = (c.querySelector('.ss input[type=hidden]') || {}).value || ''; arr.push({ type: tt, date: vcard(c, '.t-date') || null, time: vcard(c, '.t-time') || null, from: vcard(c, '.t-from'), to: vcard(c, '.t-to'), driver: vcard(c, '.t-driver'), car: vcard(c, '.t-car'), plate: vcard(c, '.t-plate'), notes: vcard(c, '.t-notes'), image_url: img, confirmation_image: conf }); }
-      else { var en = vcard(c, '.e-name'); if (!en) return; var cat = (c.querySelector('.ss input[type=hidden]') || {}).value || ''; arr.push({ name: en, category: cat, kind: type === 'dining' ? 'dining' : 'experience', date: vcard(c, '.e-date') || null, time: vcard(c, '.e-time') || null, location: vcard(c, '.e-location'), address: vcard(c, '.e-address'), notes: vcard(c, '.e-notes'), image_url: img, confirmation_image: conf }); }
+      if (type === 'hotel') { var n = vcard(c, '.h-name'); if (!n) return; var board = ((c.querySelector('.h-board-wrap .ss input[type=hidden]') || {}).value || ''); arr.push({ name: n, location: vcard(c, '.h-location'), address: vcard(c, '.h-address'), checkin_date: vcard(c, '.h-cin-date') || null, checkin_time: vcard(c, '.h-cin-time') || null, checkout_date: vcard(c, '.h-cout-date') || null, checkout_time: vcard(c, '.h-cout-time') || null, room: vcard(c, '.h-room'), confirmation: vcard(c, '.h-conf'), board: (board && board !== 'Not specified') ? board : null, rooms: vcard(c, '.h-rooms'), phone: vcard(c, '.h-phone'), notes: vcard(c, '.h-notes'), image_url: img, confirmation_image: conf }); }
+      else if (type === 'transport') { var hasAny = vcard(c, '.t-from') || vcard(c, '.t-to') || vcard(c, '.t-date'); if (!hasAny) return; var tt = (c.querySelector('.ss input[type=hidden]') || {}).value || ''; arr.push({ type: tt, date: vcard(c, '.t-date') || null, time: vcard(c, '.t-time') || null, from: vcard(c, '.t-from'), to: vcard(c, '.t-to'), driver: vcard(c, '.t-driver'), car: vcard(c, '.t-car'), plate: vcard(c, '.t-plate'), company: vcard(c, '.t-company'), phone: vcard(c, '.t-phone'), confirmation: vcard(c, '.t-conf'), notes: vcard(c, '.t-notes'), image_url: img, confirmation_image: conf }); }
+      else { var en = vcard(c, '.e-name'); if (!en) return; var cat = (c.querySelector('.ss input[type=hidden]') || {}).value || ''; arr.push({ name: en, category: cat, kind: type === 'dining' ? 'dining' : 'experience', date: vcard(c, '.e-date') || null, time: vcard(c, '.e-time') || null, location: vcard(c, '.e-location'), address: vcard(c, '.e-address'), confirmation: vcard(c, '.e-conf'), party: vcard(c, '.e-party'), phone: vcard(c, '.e-phone'), notes: vcard(c, '.e-notes'), image_url: img, confirmation_image: conf }); }
     });
     return arr;
   }
@@ -2559,7 +2599,7 @@
   function editItinerary(row) {
     state.docCustomer = findCustomerForDoc(row);
     state.builderTab = 'itinerary';
-    state.itinDraft = { editing_id: row.id, editing_number: row.itinerary_number, title: row.title || '', destination: row.destination || '', trip_type: row.trip_type || null, start_date: row.start_date || null, end_date: row.end_date || null, pax_adults: row.pax_adults != null ? row.pax_adults : 1, pax_children: row.pax_children || 0, pax_infants: row.pax_infants || 0, segments: row.segments || [], hotels: row.hotels || [], transport: row.transport || [], entertainment: row.entertainment || [], notes: row.notes || '', total_charged: row.total_charged || null, comparable_total: row.comparable_total || null, currency: row.currency || 'USD', price_invoice_number: row.price_invoice_number || null, city_images: row.city_images || null };
+    state.itinDraft = { editing_id: row.id, editing_number: row.itinerary_number, title: row.title || '', destination: row.destination || '', trip_type: row.trip_type || null, start_date: row.start_date || null, end_date: row.end_date || null, pax_adults: row.pax_adults != null ? row.pax_adults : 1, pax_children: row.pax_children || 0, pax_infants: row.pax_infants || 0, traveler_names: row.traveler_names || '', segments: row.segments || [], hotels: row.hotels || [], transport: row.transport || [], entertainment: row.entertainment || [], notes: row.notes || '', total_charged: row.total_charged || null, comparable_total: row.comparable_total || null, currency: row.currency || 'USD', price_invoice_number: row.price_invoice_number || null, city_images: row.city_images || null };
     state.itinFlash = { kind: 'note', text: 'Editing ' + (row.itinerary_number || 'this itinerary') + '. Make your changes (photos too), then review & resend — it updates the version in their account.' };
     state.itinView = 'form'; state.tab = 'itineraries'; refreshNav(); renderTab();
   }
@@ -2579,7 +2619,8 @@
         h('div', { class: 'inv-row2' }, [invField('Trip title', 'itin-title', 'text', 'e.g. Dubai First Class Getaway', d.title), cityField('Destination', '', d.destination, 'Start typing a city…', 'itin-dest')]),
         h('div', { class: 'inv-row2' }, [invField('Trip starts', 'itin-start', 'date', '', d.start_date), invField('Trip ends', 'itin-end', 'date', '', d.end_date)]),
         h('p', { class: 'inv-sublabel', style: 'margin-top:16px', text: 'Travellers' }),
-        h('div', { class: 'inv-row3' }, [paxField('Adults (12+)', 'itin-adults', d.pax_adults != null ? d.pax_adults : 1), paxField('Children (2–11)', 'itin-children', d.pax_children != null ? d.pax_children : 0), paxField('Infants (under 2)', 'itin-infants', d.pax_infants != null ? d.pax_infants : 0)])
+        h('div', { class: 'inv-row3' }, [paxField('Adults (12+)', 'itin-adults', d.pax_adults != null ? d.pax_adults : 1), paxField('Children (2–11)', 'itin-children', d.pax_children != null ? d.pax_children : 0), paxField('Infants (under 2)', 'itin-infants', d.pax_infants != null ? d.pax_infants : 0)]),
+        h('label', { class: 'inv-field', style: 'margin-top:14px' }, [h('span', { text: 'Traveller names (optional — shown on the itinerary)' }), h('textarea', { id: 'itin-names', class: 'inv-input inv-textarea', rows: '2', placeholder: 'e.g.\nMr Ahmed Loya\nMrs Loya', value: d.traveler_names || '' })])
       ]),
       h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'Flights' }),
@@ -2608,7 +2649,7 @@
   function collectItin() {
     var pa = parseInt(val('itin-adults'), 10); if (isNaN(pa)) pa = 0;
     var pc = parseInt(val('itin-children'), 10) || 0, pi = parseInt(val('itin-infants'), 10) || 0;
-    return { customer: state.docCustomer, title: val('itin-title'), destination: val('itin-dest'), start_date: val('itin-start') || null, end_date: val('itin-end') || null, pax_adults: pa, pax_children: pc, pax_infants: pi, passengers: (pa + pc + pi) || 1, trip_type: readTripType(), segments: readSegments(), hotels: readCards('itin-hotels', 'hotel'), transport: readCards('itin-transport', 'transport'), entertainment: readCards('itin-dining', 'dining').concat(readCards('itin-ent', 'ent')), notes: val('itin-notes'), total_charged: parseFloat(val('itin-total')) || null, comparable_total: parseFloat(val('itin-comp')) || null, currency: val('itin-cur') || (state.settings && state.settings.default_currency) || 'USD', price_invoice_number: val('itin-pull-inv') || null };
+    return { customer: state.docCustomer, title: val('itin-title'), destination: val('itin-dest'), start_date: val('itin-start') || null, end_date: val('itin-end') || null, pax_adults: pa, pax_children: pc, pax_infants: pi, passengers: (pa + pc + pi) || 1, traveler_names: val('itin-names') || null, trip_type: readTripType(), segments: readSegments(), hotels: readCards('itin-hotels', 'hotel'), transport: readCards('itin-transport', 'transport'), entertainment: readCards('itin-dining', 'dining').concat(readCards('itin-ent', 'ent')), notes: val('itin-notes'), total_charged: parseFloat(val('itin-total')) || null, comparable_total: parseFloat(val('itin-comp')) || null, currency: val('itin-cur') || (state.settings && state.settings.default_currency) || 'USD', price_invoice_number: val('itin-pull-inv') || null };
   }
   async function pullInvoicePricing() {
     var num = (val('itin-pull-inv') || '').trim(), status = document.getElementById('itin-pull-status');
@@ -2650,7 +2691,7 @@
     d = d || {}; var p = d.customer || {};
     return { settings: state.settings || {}, profile: { first_name: p.first_name || '', last_name: p.last_name || '' }, itinerary: {
       itinerary_number: 'PREVIEW', title: d.title || null, destination: d.destination || null, trip_type: d.trip_type || null,
-      start_date: d.start_date || null, end_date: d.end_date || null, pax_adults: d.pax_adults, pax_children: d.pax_children, pax_infants: d.pax_infants, passengers: d.passengers,
+      start_date: d.start_date || null, end_date: d.end_date || null, pax_adults: d.pax_adults, pax_children: d.pax_children, pax_infants: d.pax_infants, passengers: d.passengers, traveler_names: d.traveler_names || null,
       segments: d.segments || [], hotels: d.hotels || [], transport: d.transport || [], entertainment: d.entertainment || [],
       notes: d.notes || null, total_charged: d.total_charged || null, comparable_total: d.comparable_total || null, currency: d.currency || 'USD',
       city_images: d.city_images || null
@@ -2786,7 +2827,7 @@
   async function sendItin(btn) {
     var d = state.itinDraft, msg = document.getElementById('rev-msg');
     if (!d || !d.customer) { state.itinView = 'form'; renderTab(); return; }
-    var payload = { customer_email: d.customer.email, account_number: d.customer.account_number || null, user_id: d.customer.id, title: d.title || null, destination: d.destination || null, trip_type: d.trip_type || null, start_date: d.start_date, end_date: d.end_date, passengers: d.passengers, pax_adults: d.pax_adults, pax_children: d.pax_children, pax_infants: d.pax_infants, segments: d.segments, hotels: d.hotels, transport: d.transport, entertainment: d.entertainment, notes: d.notes || null, total_charged: d.total_charged, comparable_total: d.comparable_total, price_invoice_number: d.price_invoice_number || null, city_images: (d.city_images && Object.keys(d.city_images).length) ? d.city_images : null };
+    var payload = { customer_email: d.customer.email, account_number: d.customer.account_number || null, user_id: d.customer.id, title: d.title || null, destination: d.destination || null, trip_type: d.trip_type || null, start_date: d.start_date, end_date: d.end_date, passengers: d.passengers, pax_adults: d.pax_adults, pax_children: d.pax_children, pax_infants: d.pax_infants, traveler_names: d.traveler_names || null, segments: d.segments, hotels: d.hotels, transport: d.transport, entertainment: d.entertainment, notes: d.notes || null, total_charged: d.total_charged, comparable_total: d.comparable_total, price_invoice_number: d.price_invoice_number || null, city_images: (d.city_images && Object.keys(d.city_images).length) ? d.city_images : null };
     var editing = !!d.editing_id;
     btn.disabled = true; btn.textContent = editing ? 'Updating…' : 'Sending…';
     var r;
@@ -2932,11 +2973,14 @@
       var pods = [];
       Array.prototype.forEach.call(itinEls, function (c) {
         var pax = parseInt((c.querySelector('.gt-i-pax') || {}).value, 10); if (isNaN(pax) || pax < 1) pax = null;
+        var pt = parseFloat((c.querySelector('.gt-i-total') || {}).value); if (isNaN(pt)) pt = null;
+        var pcp = parseFloat((c.querySelector('.gt-i-comp') || {}).value); if (isNaN(pcp)) pcp = null;
         pods.push({
           label: ((c.querySelector('.gt-i-label') || {}).value || '').trim(),
           title: ((c.querySelector('.gt-i-title') || {}).value || '').trim() || null,
           pax: pax,
           travelers: ((c.querySelector('.gt-i-travelers') || {}).value || '').trim(),
+          total: pt, comp: pcp,
           out_segments: readLegsFrom(c.querySelector('.inv-segs[data-leg="out"]')),
           ret_segments: readLegsFrom(c.querySelector('.inv-segs[data-leg="ret"]'))
         });
@@ -2953,7 +2997,7 @@
   function gtBuildView() {
     state.gtBuilding = true;
     var g = state.gt, wrap = h('div');
-    if (!g.pods.length) g.pods = [{ label: '', title: null, pax: null, travelers: '', out_segments: [], ret_segments: [] }];
+    if (!g.pods.length) g.pods = [{ label: '', title: null, pax: null, travelers: '', total: null, comp: null, out_segments: [], ret_segments: [] }];
     wrap.appendChild(mainHead(g.editing_id ? 'Edit group trip' : 'New group trip', 'One trip, several itineraries. Build the shared part once, then fill in each itinerary’s own start, travellers and flights.'));
     var body = h('div', { class: 'main-body' });
     if (state.gtFlash) { body.appendChild(flashEl(state.gtFlash, false)); state.gtFlash = null; }
@@ -2994,7 +3038,7 @@
       ]),
       h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'Pricing & notes (optional)' }),
-        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'The price is applied to each generated itinerary. Pull it from an invoice or type it in.' }),
+        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Used for every itinerary unless a group has its own price set on its card above. Pull from an invoice or type it in.' }),
         h('div', { class: 'inv-row2' }, [
           h('label', { class: 'inv-field' }, [h('span', { text: 'Pull from invoice no.' }), h('div', { class: 'itin-pull-row' }, [h('input', { id: 'itin-pull-inv', class: 'inv-input', type: 'text', placeholder: 'e.g. INV-100245', autocomplete: 'off', value: g.price_invoice_number || '' }), h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:0 16px; height:46px', onclick: pullInvoicePricing, text: 'Pull' })])]),
           h('div', { class: 'inv-field' }, [h('span', { class: 'seg-lookup-spacer', text: 'x' }), h('span', { id: 'itin-pull-status', class: 'seg-lookup-status', style: 'margin-top:13px' })])
@@ -3024,7 +3068,7 @@
   function gtSetCount(n) {
     var g = state.gt; gtCollectAll();
     n = Math.max(1, Math.min(10, n));
-    while (g.pods.length < n) g.pods.push({ label: '', title: null, pax: null, travelers: '', out_segments: [], ret_segments: [] });
+    while (g.pods.length < n) g.pods.push({ label: '', title: null, pax: null, travelers: '', total: null, comp: null, out_segments: [], ret_segments: [] });
     while (g.pods.length > n) g.pods.pop();
     renderTab();
   }
@@ -3037,9 +3081,10 @@
         h('label', { class: 'inv-field' }, [h('span', { text: 'Starting point' }), h('input', { class: 'inv-input gt-i-label', type: 'text', placeholder: 'e.g. Detroit', autocomplete: 'off', value: pod.label || '' })]),
         h('label', { class: 'inv-field' }, [h('span', { text: 'Display title (shown to the customer)' }), h('input', { class: 'inv-input gt-i-title', type: 'text', placeholder: 'Defaults to the trip name', autocomplete: 'off', value: pod.title || '' })])
       ]),
-      h('div', { class: 'inv-row2', style: 'margin-bottom:16px' }, [
+      h('div', { class: 'inv-row3', style: 'margin-bottom:16px' }, [
         h('label', { class: 'inv-field' }, [h('span', { text: 'Number of travellers' }), h('input', { class: 'inv-input gt-i-pax', type: 'number', min: '1', step: '1', value: pod.pax != null ? pod.pax : '' })]),
-        h('div')
+        h('label', { class: 'inv-field' }, [h('span', { text: 'This group\u2019s price (optional)' }), h('input', { class: 'inv-input gt-i-total', type: 'number', min: '0', step: '0.01', placeholder: 'Uses trip pricing if blank', value: pod.total != null ? pod.total : '' })]),
+        h('label', { class: 'inv-field' }, [h('span', { text: 'Comparable price (optional)' }), h('input', { class: 'inv-input gt-i-comp', type: 'number', min: '0', step: '0.01', placeholder: 'Retail they would pay', value: pod.comp != null ? pod.comp : '' })])
       ]),
       h('label', { class: 'inv-field' }, [h('span', { text: 'Traveller names (optional)' }), h('textarea', { class: 'inv-input inv-textarea gt-i-travelers', rows: '2', placeholder: 'e.g.\nMr Ahmed Loya\nMrs Loya', value: pod.travelers || '' })]),
       h('p', { class: 'gt-sub-label', style: 'margin-top:14px', text: 'Their flight(s) to ' + meet + ' — departure' }),
@@ -3152,7 +3197,7 @@
         start_date: dates.start, end_date: dates.end,
         passengers: pax, pax_adults: pax, pax_children: 0, pax_infants: 0,
         segments: composed, hotels: g.shared.hotels || [], transport: g.shared.transport || [], entertainment: g.shared.entertainment || [],
-        notes: g.notes || null, total_charged: g.total_charged, comparable_total: g.comparable_total, currency: g.currency || 'USD',
+        notes: g.notes || null, total_charged: (pod.total != null ? pod.total : g.total_charged), comparable_total: (pod.comp != null ? pod.comp : g.comparable_total), currency: g.currency || 'USD',
         price_invoice_number: g.price_invoice_number || null, city_images: (g.city_images && Object.keys(g.city_images).length) ? g.city_images : null
       };
     });

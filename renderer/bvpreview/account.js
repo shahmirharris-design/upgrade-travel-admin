@@ -606,7 +606,7 @@
       var lc = (prev.to && (prev.to.city || prev.to.code)) || '', ld = (s.layover_duration || '').trim() || bvLayoverDur(prev, s);
       kids.push(h('div', { class: 'ld-layover', text: bvLayoverWord(s) + (lc ? ' in ' + lc : '') + (ld ? '  ·  ' + ld + ' on the ground' : '') + (s.layover_note ? ' — ' + s.layover_note : '') }));
     }
-    var ad = s.return_date || bvArriveDate(s);
+    var ad = s.arrive_date || s.return_date || bvArriveDate(s);
     kids.push(ldPills([
       ['Date', s.depart_date ? fmtDate(s.depart_date) : ''],
       ['Departs', s.depart_time ? fmtTime(s.depart_time) : ''],
@@ -616,7 +616,8 @@
       ['Terminal', [s.dep_terminal, s.arr_terminal].filter(Boolean).join(' → ')],
       ['Seats', seatStr(s.seats)],
       ['Baggage', bagStr(s.baggage)],
-      ['Confirmation', s.confirmation || '']
+      ['Confirmation', s.confirmation || ''],
+      ['E-ticket', s.eticket || '']
     ]));
     if (s.notes) kids.push(h('p', { class: 'ld-prose', text: s.notes }));
     var sub = [s.airline, s.cabin, s.flight_number].filter(Boolean).join('  ·  ');
@@ -631,7 +632,10 @@
       ['Check-in', x.checkin_date ? fmtDate(x.checkin_date) + (x.checkin_time ? ' · ' + fmtTime(x.checkin_time) : '') : ''],
       ['Check-out', x.checkout_date ? fmtDate(x.checkout_date) + (x.checkout_time ? ' · ' + fmtTime(x.checkout_time) : '') : ''],
       ['Nights', nights ? '' + nights : ''],
-      ['Confirmation', x.confirmation || '']
+      ['Meals', x.board || ''],
+      ['Rooms', x.rooms || ''],
+      ['Confirmation', x.confirmation || ''],
+      ['Phone', x.phone || '']
     ])];
     if (x.address) kids.push(h('p', { class: 'ld-addr', text: x.address }));
     if (x.notes) kids.push(h('p', { class: 'ld-prose', text: x.notes }));
@@ -646,7 +650,10 @@
     var kids = [ldPills([
       ['Date', x.date ? fmtDate(x.date) : ''],
       ['Time', x.time ? fmtTime(x.time) : ''],
-      ['Chauffeur', [x.driver, x.car, x.plate].filter(Boolean).join(' · ')]
+      ['Chauffeur', [x.driver, x.car, x.plate].filter(Boolean).join(' · ')],
+      ['Provider', x.company || ''],
+      ['Confirmation', x.confirmation || ''],
+      ['Phone', x.phone || '']
     ])];
     if (x.notes) kids.push(h('p', { class: 'ld-prose', text: x.notes }));
     ldConf(kids, x);
@@ -656,7 +663,10 @@
     var kids = [ldPills([
       ['Date', x.date ? fmtDate(x.date) : ''],
       ['Time', x.time ? fmtTime(x.time) : ''],
-      ['Where', [x.location, x.address].filter(Boolean).join(' · ')]
+      ['Where', [x.location, x.address].filter(Boolean).join(' · ')],
+      ['Party size', x.party || ''],
+      ['Confirmation', x.confirmation || ''],
+      ['Phone', x.phone || '']
     ])];
     if (x.notes) kids.push(h('p', { class: 'ld-prose', text: x.notes }));
     ldConf(kids, x);
@@ -766,6 +776,7 @@
       ['Cabin', (it.segments && it.segments[0] && it.segments[0].cabin) || ''],
       ['Itinerary', it.itinerary_number ? 'No. ' + it.itinerary_number : '']
     ]));
+    if (it.traveler_names) doc.appendChild(h('p', { class: 'ld-party', text: 'Travelling party: ' + travelerList(it.traveler_names).join(', ') }));
     var no = 0;
     ldEvents(it).forEach(function (ev) {
       if (ev.type === 'banner') doc.appendChild(ldBanner(ev.city));
@@ -819,7 +830,7 @@
     chips.push(h('span', { class: 'trip-chip', text: paxText(it) }));
     var sv = itinSavings(it); if (sv > 0) chips.push(h('span', { class: 'trip-chip trip-chip--save', text: 'You save ' + money(sv, it.currency) }));
     card.appendChild(h('div', { class: 'trip-meta' }, chips));
-    if (opts.group && it.traveler_names) { var tl = travelerList(it.traveler_names); if (tl.length) card.appendChild(h('p', { class: 'itin-travelers' }, [h('span', { class: 'itin-travelers-k', text: 'Travellers' }), h('span', { text: tl.join(', ') })])); }
+    if (it.traveler_names) { var tl = travelerList(it.traveler_names); if (tl.length) card.appendChild(h('p', { class: 'itin-travelers' }, [h('span', { class: 'itin-travelers-k', text: 'Travellers' }), h('span', { text: tl.join(', ') })])); }
     var sum = [], nf = (it.segments || []).length, nh = (it.hotels || []).length, nt = (it.transport || []).length, ne = (it.entertainment || []).length;
     if (nf) sum.push(nf + (nf > 1 ? ' flights' : ' flight'));
     if (nh) sum.push(nh + (nh > 1 ? ' hotels' : ' hotel'));
@@ -1518,13 +1529,18 @@
     if (!op || op.toLowerCase() === (s.airline || '').trim().toLowerCase()) return '';
     return op;
   }
+  /* curated online check-in pages for the airlines dad books most */
+  var AIRLINE_CHECKIN = { 'turkish airlines': 'https://www.turkishairlines.com/en-int/flights/manage-booking/', 'emirates': 'https://www.emirates.com/manage-booking/', 'qatar airways': 'https://www.qatarairways.com/en/manage-booking.html', 'etihad airways': 'https://www.etihad.com/en/manage', 'singapore airlines': 'https://www.singaporeair.com/en_UK/manage-booking/', 'lufthansa': 'https://www.lufthansa.com/us/en/online-check-in', 'swiss': 'https://www.swiss.com/us/en/customer-support/check-in', 'british airways': 'https://www.britishairways.com/travel/managebooking/public/en_us', 'air france': 'https://wwws.airfrance.us/check-in', 'klm': 'https://www.klm.us/check-in', 'american airlines': 'https://www.aa.com/reservation/view/find-your-trip', 'delta air lines': 'https://www.delta.com/mytrips/', 'united airlines': 'https://www.united.com/en/us/checkin', 'cathay pacific': 'https://www.cathaypacific.com/cx/en_US/manage-booking.html', 'ana': 'https://www.ana.co.jp/en/us/plan-book/check-in/', 'japan airlines': 'https://www.jal.co.jp/jp/en/inter/service/checkin/', 'korean air': 'https://www.koreanair.com/booking/check-in', 'aegean airlines': 'https://en.aegeanair.com/travel-info/check-in/', 'air canada': 'https://www.aircanada.com/us/en/aco/home/fly/check-in.html', 'qantas': 'https://www.qantas.com/us/en/travel-info/check-in.html' };
+  function bvCheckinURL(airline) { if (!airline) return ''; return AIRLINE_CHECKIN[airline.trim().toLowerCase()] || ''; }
   function bvFlight(s, idx, role, skipPerks) {
     var card = h('div', { class: 'bv-flight' });
     var opby = bvCodeshare(s);
     card.appendChild(h('div', { class: 'bv-flight-head' }, [role ? h('span', { class: 'bv-flight-role', text: role }) : null, h('div', { class: 'bv-al serif', text: s.airline || 'Your flight' }), s.cabin ? h('span', { class: 'bv-cab', text: s.cabin }) : null]));
     if (opby) card.appendChild(h('div', { class: 'bv-opby', text: 'Operated by ' + opby }));
+    var ciUrl = bvCheckinURL(s.airline);
+    if (ciUrl) card.appendChild(h('a', { class: 'bv-checkin', href: ciUrl, target: '_blank', rel: 'noopener', text: 'Online check-in with ' + s.airline }));
     var body = h('div', { class: 'bv-flight-body' });
-    var dt = s.depart_time ? fmtTime(s.depart_time) : '', at = s.arrive_time ? fmtTime(s.arrive_time) : '', ad = s.return_date || bvArriveDate(s);
+    var dt = s.depart_time ? fmtTime(s.depart_time) : '', at = s.arrive_time ? fmtTime(s.arrive_time) : '', ad = s.arrive_date || s.return_date || bvArriveDate(s);
     body.appendChild(h('div', { class: 'bv-timeline' }, [
       h('div', { class: 'bv-tl-end' }, [h('div', { class: 'bv-time' + (dt ? '' : ' bv-time-sm'), text: dt || s.from.city }), h('div', { class: 'bv-code', text: s.from.code }), h('div', { class: 'bv-date', text: s.depart_date ? fmtDate(s.depart_date) : '' })]),
       h('div', { class: 'bv-tl-mid' }, [h('div', { class: 'bv-dur', text: !s.duration ? 'Nonstop' : (/nonstop/i.test(s.duration) ? s.duration : s.duration + '  ·  Nonstop') }), h('div', { class: 'bv-tl-line' }), h('div', { class: 'bv-fno', text: [s.flight_number, s.aircraft].filter(Boolean).join('  ·  ') })]),
@@ -1541,6 +1557,7 @@
       ['Baggage', bagStr(s.baggage) || '—'],
       ['Confirmation', s.confirmation || '—']
     ];
+    if (s.eticket) meta.push(['E-ticket', s.eticket]);
     body.appendChild(h('div', { class: 'bv-flight-meta' }, meta.map(function (m) { return h('div', { class: 'bv-meta-cell' }, [h('div', { class: 'bv-k', text: m[0] }), h('div', { class: 'bv-v', text: m[1] })]); })));
     card.appendChild(body);
     var perks = skipPerks ? [] : cabinPerks(s.cabin, s.airline);
@@ -1552,7 +1569,7 @@
   }
   /* a layover happens at ONE airport, so arrive + next-depart are in the same local time — a plain diff is correct */
   function bvLayoverDur(prev, next) {
-    var ad = prev.return_date || bvArriveDate(prev), aT = prev.arrive_time, dd = next.depart_date, dT = next.depart_time;
+    var ad = prev.arrive_date || prev.return_date || bvArriveDate(prev), aT = prev.arrive_time, dd = next.depart_date, dT = next.depart_time;
     if (!ad || !aT || !dd || !dT) return '';
     var mins = Math.round((new Date(dd + 'T' + dT + ':00') - new Date(ad + 'T' + aT + ':00')) / 60000);
     if (isNaN(mins) || mins <= 0 || mins > 2880) return '';
@@ -1612,7 +1629,10 @@
     if (x.checkout_date) meta.push(['Check-out', fmtDate(x.checkout_date) + (x.checkout_time ? '  ·  ' + fmtTime(x.checkout_time) : '')]);
     if (x.room) meta.push(['Room', x.room]);
     if (nights) meta.push(['Nights', String(nights)]);
+    if (x.board) meta.push(['Meals', x.board]);
+    if (x.rooms) meta.push(['Rooms', x.rooms]);
     if (x.confirmation) meta.push(['Confirmation', x.confirmation]);
+    if (x.phone) meta.push(['Hotel phone', x.phone]);
     return h('div', { class: 'bv-item' }, [
       h('div', { class: 'bv-item-photo bv-ph bv-ph-hotel' + (idx % 2), 'data-hotel': x.name || '', 'data-hotel-city': x.location || '', 'data-hotel-addr': x.address || '', 'data-img': x.image_url || null }),
       h('div', { class: 'bv-item-body' }, [
@@ -1631,6 +1651,9 @@
     if (when) meta.push(['When', when]);
     var chauffeur = [x.driver, x.car, x.plate].filter(Boolean).join('  ·  ');
     if (chauffeur) meta.push(['Chauffeur', chauffeur]);
+    if (x.company) meta.push(['Provider', x.company]);
+    if (x.confirmation) meta.push(['Confirmation', x.confirmation]);
+    if (x.phone) meta.push(['Phone', x.phone]);
     return h('div', { class: 'bv-item' }, [
       h('div', { class: 'bv-item-photo bv-ph bv-ph-car', 'data-venue': x.car || x.type || 'private transfer', 'data-venue-cat': [x.type, x.car].filter(Boolean).join(' ') || 'chauffeur', 'data-venue-city': ((x.to || x.from || '').split(',').pop() || '').trim(), 'data-img': x.image_url || null }),
       h('div', { class: 'bv-item-body' }, [
@@ -1647,6 +1670,9 @@
     var when = [x.date ? fmtDate(x.date) : '', fmtTime(x.time)].filter(Boolean).join('  ·  ');
     if (when) meta.push(['When', when]);
     if (x.location || x.address) meta.push(['Where', [x.location, x.address].filter(Boolean).join('  ·  ')]);
+    if (x.party) meta.push(['Party size', x.party]);
+    if (x.confirmation) meta.push(['Confirmation', x.confirmation]);
+    if (x.phone) meta.push(['Phone', x.phone]);
     return h('div', { class: 'bv-item' }, [
       h('div', { class: 'bv-item-photo bv-ph bv-ph-exp', 'data-venue': x.name || '', 'data-venue-cat': x.category || '', 'data-venue-city': ((x.location || '').split(',').pop() || '').trim(), 'data-venue-addr': x.address || '', 'data-img': x.image_url || null }),
       h('div', { class: 'bv-item-body' }, [
@@ -1709,6 +1735,7 @@
       ]),
       h('div', { class: 'bv-wrap bv-hero-mid' }, [
         h('div', { class: 'bv-hero-prepared' }, [h('span', { class: 'bv-prep-k', text: 'Prepared exclusively for' }), h('span', { class: 'bv-prep-n', text: [p.first_name, p.last_name].filter(Boolean).join(' ') || 'you' })]),
+        it.traveler_names ? h('div', { class: 'bv-party', text: travelerList(it.traveler_names).join('   ·   ') }) : null,
         h('h1', { class: 'bv-hero-title serif' }, uniqD.length ? joinGold((heroOrigin.city && uniqD.indexOf(heroOrigin.city) < 0 ? [heroOrigin.city] : []).concat(uniqD)) : [it.title || it.destination || 'Your journey']),
         h('div', { class: 'bv-hero-sub' }, heroStats.map(function (st) { return h('div', { class: 'bv-hkpi' }, [h('div', { class: 'bv-k', text: st[0] }), h('div', { class: 'bv-v', text: st[1] })]); }))
       ]),
