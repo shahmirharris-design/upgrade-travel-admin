@@ -92,18 +92,26 @@
     _updSubbed = true;
     window.adminApp.onUpdateStatus(function (s) {
       if (!s) return;
-      if (s.state === 'checking') setUpdateStatus('Checking for updates…', '');
-      else if (s.state === 'available') setUpdateStatus('Update available: version ' + (s.version || '') + '. Downloading…', 'ok');
-      else if (s.state === 'downloading') setUpdateStatus('Downloading update… ' + (s.percent != null ? s.percent + '%' : ''), '');
-      else if (s.state === 'downloaded') setUpdateStatus('Update ready — restart to install version ' + (s.version || '') + '.', 'ok');
-      else if (s.state === 'none') setUpdateStatus('You are on the latest version.', 'ok');
-      else if (s.state === 'error') setUpdateStatus('Automatic update could not complete: ' + (s.message || 'error') + '. Use the download page below to update manually.', 'err');
+      var mac = window.adminApp.platform === 'darwin';
+      if (s.state === 'checking') { setUpdateStatus('Checking for updates…', ''); showUpdProgress(null); }
+      else if (s.state === 'available') { setUpdateStatus('Update available: version ' + (s.version || '') + (mac ? '. Use “Open the download page” below to install it.' : '. Downloading…'), 'ok'); if (mac) hideUpdProgress(); else showUpdProgress(null); }
+      else if (s.state === 'downloading') { setUpdateStatus('Downloading update… ' + (s.percent != null ? s.percent + '%' : ''), ''); showUpdProgress(s.percent != null ? s.percent : null); }
+      else if (s.state === 'downloaded') { setUpdateStatus('Update ready — restart to install version ' + (s.version || '') + '.', 'ok'); showUpdProgress(100); }
+      else if (s.state === 'none') { setUpdateStatus('You are on the latest version.', 'ok'); hideUpdProgress(); }
+      else if (s.state === 'error') { setUpdateStatus((mac ? 'This Mac build can’t install updates automatically. Use the download page below.' : 'Automatic update could not complete: ' + (s.message || 'error') + '. Use the download page below.'), 'err'); hideUpdProgress(); }
     });
   }
   function setUpdateStatus(text, kind) {
     var el = document.getElementById('update-status'); if (!el) return;
     el.textContent = text; el.className = 'set-update-status' + (kind ? ' su-' + kind : '');
   }
+  function showUpdProgress(pct) {
+    var bar = document.getElementById('upd-progress'), fill = document.getElementById('upd-progress-fill'); if (!bar || !fill) return;
+    bar.hidden = false;
+    if (pct == null) { bar.classList.add('is-indeterminate'); fill.style.width = ''; }
+    else { bar.classList.remove('is-indeterminate'); fill.style.width = Math.max(0, Math.min(100, Math.round(pct))) + '%'; }
+  }
+  function hideUpdProgress() { var bar = document.getElementById('upd-progress'); if (bar) { bar.hidden = true; bar.classList.remove('is-indeterminate'); } }
   function fillAppVersion() {
     var el = document.getElementById('set-ver'); if (!el) return;
     if (window.adminApp && window.adminApp.appVersion) window.adminApp.appVersion().then(function (v) { var e2 = document.getElementById('set-ver'); if (e2) e2.textContent = 'v' + v; }).catch(function () { });
@@ -116,8 +124,10 @@
     var r = await window.adminApp.checkForUpdates();
     if (btn) btn.disabled = false;
     if (!r || !r.ok) { setUpdateStatus((r && r.message) || 'Could not check for updates.', 'err'); return; }
-    if (r.available) setUpdateStatus('Update available: version ' + r.latest + '. It is downloading now — you will be asked to restart. If nothing happens, use the download page below.', 'ok');
-    else setUpdateStatus('You are on the latest version (v' + r.current + ').', 'ok');
+    if (r.available) {
+      if (window.adminApp.platform === 'darwin') { setUpdateStatus('Update available: version ' + r.latest + '. On this Mac, tap “Open the download page” below to install it (automatic install needs a signed build).', 'ok'); hideUpdProgress(); }
+      else { setUpdateStatus('Update available: version ' + r.latest + '. Downloading now — you will be asked to restart when it is ready.', 'ok'); showUpdProgress(null); }
+    } else { setUpdateStatus('You are on the latest version (v' + r.current + ').', 'ok'); hideUpdProgress(); }
   }
   async function isAdmin() { var r = await sb.rpc('is_admin'); return r.data === true && !r.error; }
 
@@ -922,6 +932,7 @@
           h('button', { type: 'button', id: 'set-update-btn', class: 'btn btn-ghost', style: 'width:auto', onclick: runUpdateCheck, text: 'Check for updates' })
         ]),
         h('div', { id: 'update-status', class: 'set-update-status', text: '' }),
+        h('div', { id: 'upd-progress', class: 'upd-progress', hidden: true }, [h('div', { id: 'upd-progress-fill', class: 'upd-progress-fill' })]),
         h('button', { type: 'button', class: 'set-dl-link', onclick: function () { if (window.adminApp && window.adminApp.openReleases) window.adminApp.openReleases(); }, text: 'Open the download page' })
       ]),
       h('div', { class: 'inv-submit' }, [h('div', { id: 'set-msg', class: 'msg', style: 'display:none' }), h('button', { type: 'submit', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Save settings' })])
