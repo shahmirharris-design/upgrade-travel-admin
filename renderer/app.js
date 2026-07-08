@@ -81,9 +81,43 @@
       state.customers = (await sb.from('profiles').select('*').order('created_at', { ascending: false })).data || [];
       viewApp();
       subscribeRealtime();
+      registerUpdateStatus();
     } catch (e) {
       viewLogin('Could not connect. Check your internet connection and try again.');
     }
+  }
+  var _updSubbed = false;
+  function registerUpdateStatus() {
+    if (_updSubbed || !window.adminApp || !window.adminApp.onUpdateStatus) return;
+    _updSubbed = true;
+    window.adminApp.onUpdateStatus(function (s) {
+      if (!s) return;
+      if (s.state === 'checking') setUpdateStatus('Checking for updates…', '');
+      else if (s.state === 'available') setUpdateStatus('Update available: version ' + (s.version || '') + '. Downloading…', 'ok');
+      else if (s.state === 'downloading') setUpdateStatus('Downloading update… ' + (s.percent != null ? s.percent + '%' : ''), '');
+      else if (s.state === 'downloaded') setUpdateStatus('Update ready — restart to install version ' + (s.version || '') + '.', 'ok');
+      else if (s.state === 'none') setUpdateStatus('You are on the latest version.', 'ok');
+      else if (s.state === 'error') setUpdateStatus('Automatic update could not complete: ' + (s.message || 'error') + '. Use the download page below to update manually.', 'err');
+    });
+  }
+  function setUpdateStatus(text, kind) {
+    var el = document.getElementById('update-status'); if (!el) return;
+    el.textContent = text; el.className = 'set-update-status' + (kind ? ' su-' + kind : '');
+  }
+  function fillAppVersion() {
+    var el = document.getElementById('set-ver'); if (!el) return;
+    if (window.adminApp && window.adminApp.appVersion) window.adminApp.appVersion().then(function (v) { var e2 = document.getElementById('set-ver'); if (e2) e2.textContent = 'v' + v; }).catch(function () { });
+    else el.textContent = 'installed app only';
+  }
+  async function runUpdateCheck() {
+    var btn = document.getElementById('set-update-btn');
+    if (!window.adminApp || !window.adminApp.checkForUpdates) { setUpdateStatus('Updates are only available in the installed desktop app.', 'err'); return; }
+    setUpdateStatus('Checking for updates…', ''); if (btn) btn.disabled = true;
+    var r = await window.adminApp.checkForUpdates();
+    if (btn) btn.disabled = false;
+    if (!r || !r.ok) { setUpdateStatus((r && r.message) || 'Could not check for updates.', 'err'); return; }
+    if (r.available) setUpdateStatus('Update available: version ' + r.latest + '. It is downloading now — you will be asked to restart. If nothing happens, use the download page below.', 'ok');
+    else setUpdateStatus('You are on the latest version (v' + r.current + ').', 'ok');
   }
   async function isAdmin() { var r = await sb.rpc('is_admin'); return r.data === true && !r.error; }
 
@@ -852,6 +886,7 @@
     if (state.settingsFlash) { body.appendChild(h('div', { class: 'msg ' + state.settingsFlash.kind, text: state.settingsFlash.text })); state.settingsFlash = null; }
     body.appendChild(settingsForm(state.settings || {}));
     wrap.appendChild(body);
+    setTimeout(fillAppVersion, 0);
     return wrap;
   }
   function settingsForm(s) {
@@ -878,6 +913,16 @@
           h('label', { class: 'inv-field' }, [h('span', { text: 'Cabin' }), styledSelect('set-cabin', s.default_cabin || 'Business Class', CABINS, null)])
         ]),
         h('div', { class: 'inv-row2' }, [invField('Quote valid for (days)', 'set-validity', 'number', '14', s.quote_validity_days != null ? s.quote_validity_days : 14), invField('Default deposit (%)', 'set-deposit', 'number', '0', s.deposit_pct != null ? s.deposit_pct : 0)])
+      ]),
+      h('div', { class: 'inv-section' }, [
+        h('h3', { class: 'inv-h3', text: 'App & updates' }),
+        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'The desktop app updates itself when a new version is released. You can also check now.' }),
+        h('div', { class: 'set-ver-row' }, [
+          h('div', { class: 'set-ver' }, [h('span', { class: 'set-ver-label', text: 'Version' }), h('span', { id: 'set-ver', class: 'set-ver-num', text: '…' })]),
+          h('button', { type: 'button', id: 'set-update-btn', class: 'btn btn-ghost', style: 'width:auto', onclick: runUpdateCheck, text: 'Check for updates' })
+        ]),
+        h('div', { id: 'update-status', class: 'set-update-status', text: '' }),
+        h('button', { type: 'button', class: 'set-dl-link', onclick: function () { if (window.adminApp && window.adminApp.openReleases) window.adminApp.openReleases(); }, text: 'Open the download page' })
       ]),
       h('div', { class: 'inv-submit' }, [h('div', { id: 'set-msg', class: 'msg', style: 'display:none' }), h('button', { type: 'submit', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Save settings' })])
     ]);

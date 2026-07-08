@@ -46,12 +46,32 @@ function createWindow() {
 }
 
 // Auto-update: checks GitHub Releases on launch, downloads new versions in the
-// background, and installs them on the next restart. Silent unless something is found.
+// background, and installs them on the next restart. Also exposes a manual
+// "Check for updates" (from Settings) and always offers a download-page fallback
+// (needed on macOS, where an unsigned/ad-hoc build cannot self-install).
+const RELEASES_URL = 'https://github.com/shahmirharris-design/upgrade-travel-admin/releases/latest';
+let autoUpdater = null;
+try { ({ autoUpdater } = require('electron-updater')); } catch (e) { autoUpdater = null; }
+
+function sendUpdateStatus(s) {
+  BrowserWindow.getAllWindows().forEach(function (w) { try { w.webContents.send('update-status', s); } catch (e) { /* window gone */ } });
+}
+function cmpVer(a, b) {
+  const pa = String(a).split('.').map(function (n) { return parseInt(n, 10) || 0; });
+  const pb = String(b).split('.').map(function (n) { return parseInt(n, 10) || 0; });
+  for (let i = 0; i < 3; i++) { if ((pa[i] || 0) > (pb[i] || 0)) return 1; if ((pa[i] || 0) < (pb[i] || 0)) return -1; }
+  return 0;
+}
+
 function setupAutoUpdate() {
-  let autoUpdater;
-  try { ({ autoUpdater } = require('electron-updater')); } catch (e) { return; }
+  if (!autoUpdater) return;
   autoUpdater.autoDownload = true;
+  autoUpdater.on('checking-for-update', () => sendUpdateStatus({ state: 'checking' }));
+  autoUpdater.on('update-available', (info) => sendUpdateStatus({ state: 'available', version: info && info.version }));
+  autoUpdater.on('update-not-available', () => sendUpdateStatus({ state: 'none' }));
+  autoUpdater.on('download-progress', (p) => sendUpdateStatus({ state: 'downloading', percent: Math.round((p && p.percent) || 0) }));
   autoUpdater.on('update-downloaded', async (info) => {
+    sendUpdateStatus({ state: 'downloaded', version: info && info.version });
     const win = BrowserWindow.getAllWindows()[0];
     const { response } = await dialog.showMessageBox(win, {
       type: 'info',
@@ -63,9 +83,23 @@ function setupAutoUpdate() {
     });
     if (response === 0) autoUpdater.quitAndInstall();
   });
-  autoUpdater.on('error', (err) => { console.warn('update check failed:', err && err.message); });
+  autoUpdater.on('error', (err) => { sendUpdateStatus({ state: 'error', message: (err && err.message) || 'Update failed.' }); console.warn('update error:', err && err.message); });
   try { autoUpdater.checkForUpdates(); } catch (e) { /* offline or dev, ignore */ }
 }
+
+ipcMain.handle('app-version', () => app.getVersion());
+ipcMain.handle('open-releases', () => { shell.openExternal(RELEASES_URL); return { ok: true }; });
+ipcMain.handle('check-for-updates', async () => {
+  const current = app.getVersion();
+  if (!autoUpdater) return { ok: false, current, message: 'The updater is not available in this build.' };
+  try {
+    const r = await autoUpdater.checkForUpdates();
+    const latest = r && r.updateInfo && r.updateInfo.version;
+    return { ok: true, current, latest: latest || current, available: latest ? cmpVer(latest, current) > 0 : false };
+  } catch (e) {
+    return { ok: false, current, message: (e && e.message) || 'Could not check for updates.' };
+  }
+});
 
 app.whenReady().then(() => {
   createWindow();

@@ -676,3 +676,14 @@ input{ font-family:inherit; }
 .gt-mid-note{ display:flex; align-items:center; gap:14px; margin:2px 2px 18px; }
 .gt-mid-line{ flex:1; height:1px; background:var(--line); }
 .gt-mid-text{ flex:none; font-size:11px; letter-spacing:.14em; text-transform:uppercase; font-weight:600; color:var(--gold); }
+
+/* Settings: app version + update check */
+.set-ver-row{ display:flex; align-items:center; justify-content:space-between; gap:14px; }
+.set-ver{ display:flex; align-items:baseline; gap:10px; }
+.set-ver-label{ font-size:12.5px; font-weight:500; color:var(--ink-2); }
+.set-ver-num{ font-family:var(--serif); font-size:18px; color:var(--ink); }
+.set-update-status{ font-size:12.5px; color:var(--ink-2); margin-top:12px; min-height:1em; }
+.set-update-status.su-ok{ color:#2F6B33; }
+.set-update-status.su-err{ color:#a3402f; }
+.set-dl-link{ background:none; border:none; padding:0; margin-top:10px; color:var(--gold); font-size:12.5px; font-weight:600; cursor:pointer; text-decoration:underline; }
+.set-dl-link:hover{ color:var(--gold-soft); }

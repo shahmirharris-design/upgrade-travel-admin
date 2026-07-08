@@ -4,7 +4,10 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('adminApp', {
-  version: '0.1.0',
   platform: process.platform,
-  saveCSV: (filename, content) => ipcRenderer.invoke('save-csv', { filename, content })
+  saveCSV: (filename, content) => ipcRenderer.invoke('save-csv', { filename, content }),
+  appVersion: () => ipcRenderer.invoke('app-version'),
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  openReleases: () => ipcRenderer.invoke('open-releases'),
+  onUpdateStatus: (cb) => { ipcRenderer.on('update-status', (e, s) => { try { cb(s); } catch (err) { /* ignore */ } }); }
 });
