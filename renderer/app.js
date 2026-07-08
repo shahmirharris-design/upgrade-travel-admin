@@ -2167,11 +2167,18 @@
     state.docCustomer = cust;
     function resolve(txt) {
       if (!txt) return null;
-      var A = window.UT_AIRPORTS || [], m = txt.toUpperCase().match(/\b([A-Z]{3})\b/), low = txt.toLowerCase(), c, j;
-      if (m) { for (j = 0; j < A.length; j++) { if (A[j][0] === m[1]) { c = A[j]; break; } } }
+      var A = window.UT_AIRPORTS || [], c, j;
+      var raw = ('' + txt).trim();
+      /* the site sends "Los Angeles International Airport (LAX)": the code in parentheses is
+         the truth. NEVER grab the first 3-letter word of the name (LOS ANGELES matched Lagos). */
+      var paren = raw.toUpperCase().match(/\(([A-Z0-9]{3})\)/);
+      var code = (paren && paren[1]) || (/^[A-Za-z]{3}$/.test(raw) ? raw.toUpperCase() : null);
+      if (code) { for (j = 0; j < A.length; j++) { if (A[j][0] === code) { c = A[j]; break; } } }
       if (!c) {
-        var a = searchAirports(txt);
-        for (j = 0; j < a.length; j++) { if ((a[j][3] || '').toLowerCase().indexOf(low) > -1) { c = a[j]; break; } }
+        var nameOnly = raw.replace(/\s*\([^)]*\)\s*/g, ' ').trim(), low = nameOnly.toLowerCase();
+        var a = searchAirports(nameOnly);
+        for (j = 0; j < a.length; j++) { if ((a[j][3] || '').toLowerCase() === low) { c = a[j]; break; } }
+        if (!c) for (j = 0; j < a.length; j++) { if ((a[j][3] || '').toLowerCase().indexOf(low) > -1) { c = a[j]; break; } }
         if (!c) for (j = 0; j < a.length; j++) { if (/international|intercontinental/i.test(a[j][3] || '')) { c = a[j]; break; } }
         if (!c && a.length) c = a[0];
       }
@@ -2179,9 +2186,14 @@
     }
     var f = resolve(req.route_from), t = resolve(req.route_to);
     var pd = parseToISODate(req.depart), rd = parseToISODate(req.return_date);
-    var segs = (f && t) ? [{ airline: null, cabin: req.cabin || 'Business Class', from: f, to: t, depart_date: pd, return_date: rd }] : [];
+    var tt = req.trip_type || (rd ? 'round' : 'one_way');
+    var segs = [];
+    if (f && t) {
+      segs.push({ airline: null, cabin: req.cabin || 'Business Class', from: f, to: t, depart_date: pd });
+      if (tt === 'round') segs.push({ airline: null, cabin: req.cabin || 'Business Class', from: t, to: f, depart_date: rd });
+    }
     state.builderTab = 'quote'; state.docKind = 'quote';
-    state.docDraft = { request_id: req.id, title: [req.route_from, req.route_to].filter(Boolean).join(' to '), segments: segs, pax_adults: req.adults != null ? req.adults : 1, pax_children: req.children || 0, pax_infants: req.infants || 0, line_items: [], currency: 'USD' };
+    state.docDraft = { request_id: req.id, title: [req.route_from, req.route_to].filter(Boolean).join(' to '), trip_type: tt, segments: segs, pax_adults: req.adults != null ? req.adults : 1, pax_children: req.children || 0, pax_infants: req.infants || 0, line_items: [], currency: 'USD' };
     state.docFlash = { kind: 'note', text: 'Pre-filled from a quote request submitted ' + fmtDate(req.created_at) + '.' };
     state.docView = 'form'; renderTab();
   }
