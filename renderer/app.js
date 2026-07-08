@@ -1413,7 +1413,7 @@
     if (!d) return false;
     var seg = (d.segments || []).some(function (s) { return s && (s.from || s.to || s.airline || s.flight_number); });
     var li = (d.line_items || []).some(function (i) { return i && (i.label || i.detail || i.amount); });
-    return !!(d.title || d.destination || d.notes || d.booking_reference || d.comparable_total || d.total_charged || seg || li || (d.hotels && d.hotels.length) || (d.transport && d.transport.length) || (d.entertainment && d.entertainment.length));
+    return !!(d.title || d.destination || d.notes || d.booking_reference || d.comparable_total || d.total_charged || seg || li || (d.hotels && d.hotels.length) || (d.transport && d.transport.length) || (d.entertainment && d.entertainment.length) || (d.cruises && d.cruises.length) || (d.day_notes && d.day_notes.length) || (d.documents && d.documents.length));
   }
   function saveDraft() {
     try {
@@ -2504,6 +2504,59 @@
       confField(x)
     ]);
   }
+  function cruiseCard(x) {
+    return h('div', { class: 'itin-card', 'data-itin': 'cruise' }, [itinRm(), cardImgKeep(x),
+      h('div', { class: 'inv-row2' }, [clabel('Cruise line', 'c-line', x && x.line, 'e.g. Explora Journeys'), clabel('Ship', 'c-ship', x && x.ship, 'e.g. Explora I')]),
+      h('div', { class: 'inv-row2' }, [clabel('Suite / cabin category', 'c-cabin', x && x.cabin, 'e.g. Ocean Terrace Suite'), clabel('Deck and cabin no.', 'c-deck', x && x.deck, 'e.g. Deck 8, 8014')]),
+      h('div', { class: 'inv-row2' }, [clabel('Embarkation port', 'c-eport', x && x.embark_port, 'e.g. Civitavecchia (Rome)'), cdt('Embarks', 'c-edate', 'c-etime', x && x.embark_date, x && x.embark_time)]),
+      h('div', { class: 'inv-row2' }, [clabel('Disembarkation port', 'c-dport', x && x.disembark_port, 'e.g. Piraeus (Athens)'), cdt('Disembarks', 'c-ddate', 'c-dtime', x && x.disembark_date, x && x.disembark_time)]),
+      h('div', { class: 'inv-row2' }, [clabel('Booking no.', 'c-conf', x && x.confirmation, 'Optional'), clabel('Cruise line phone', 'c-phone', x && x.phone, 'Optional')]),
+      clabel('Notes', 'c-notes', x && x.notes, 'Ports of call, dress codes, included excursions'),
+      confField(x)
+    ]);
+  }
+  function dayCard(x) {
+    return h('div', { class: 'itin-card', 'data-itin': 'day' }, [itinRm(),
+      h('div', { class: 'inv-row2' }, [clabel('Date', 'd-date', x && x.date, '', 'date'), clabel('Headline', 'd-title', x && x.title, 'e.g. Day at leisure in Rome')]),
+      h('label', { class: 'inv-field' }, [h('span', { text: 'What to know' }), h('textarea', { class: 'inv-input inv-textarea d-body', rows: '3', placeholder: 'Suggestions, timings, dress codes, anything helpful for that day.', value: (x && x.body) || '' })])
+    ]);
+  }
+  function uploadTripDoc(file, statusEl, hidden, linkEl, btnLabel) {
+    var okType = /^image\//.test(file.type) || file.type === 'application/pdf';
+    if (!okType) { setConf(statusEl, 'PDF or image files only.', 'err'); return; }
+    if (file.size > 15 * 1024 * 1024) { setConf(statusEl, 'File is too large (max 15 MB).', 'err'); return; }
+    setConf(statusEl, 'Uploading\u2026', '');
+    var ext = ((file.name || '').split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '') || 'pdf';
+    var id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now() + '-' + Math.round(Math.random() * 1e9));
+    var path = 'docs/' + id + '.' + ext;
+    sb.storage.from('itinerary-media').upload(path, file, { upsert: true, contentType: file.type }).then(function (up) {
+      if (up.error) { setConf(statusEl, up.error.message || 'Upload failed.', 'err'); return; }
+      var pub = sb.storage.from('itinerary-media').getPublicUrl(path);
+      var url = pub && pub.data && pub.data.publicUrl;
+      if (!url) { setConf(statusEl, 'Upload failed.', 'err'); return; }
+      hidden.value = url;
+      if (linkEl) { linkEl.href = url; linkEl.textContent = 'Open'; }
+      var card = hidden.closest('.itin-card'); var nameInp = card && card.querySelector('.doc-name');
+      if (nameInp && !nameInp.value.trim()) nameInp.value = (file.name || '').replace(/\.[^.]+$/, '');
+      if (btnLabel) btnLabel.textContent = 'Replace file';
+      setConf(statusEl, 'Uploaded \u2713', 'ok');
+    }).catch(function (e) { setConf(statusEl, (e && e.message) || 'Upload failed.', 'err'); });
+  }
+  function docCard(x) {
+    var hidden = h('input', { type: 'hidden', class: 'doc-url', value: (x && x.url) || '' });
+    var status = h('span', { class: 'conf-status' });
+    var file = h('input', { type: 'file', accept: 'application/pdf,image/*', class: 'conf-file', style: 'display:none' });
+    var lbl = h('span', { text: (x && x.url) ? 'Replace file' : 'Choose file' });
+    var link = h('a', { class: 'doc-open', href: (x && x.url) || '#', target: '_blank', rel: 'noopener', text: (x && x.url) ? 'Open' : '' });
+    file.addEventListener('change', function () { if (file.files && file.files[0]) uploadTripDoc(file.files[0], status, hidden, link, lbl); });
+    return h('div', { class: 'itin-card', 'data-itin': 'doc' }, [itinRm(),
+      h('div', { class: 'inv-row2' }, [
+        clabel('Document name', 'doc-name', x && x.name, 'e.g. Travel insurance certificate'),
+        h('div', { class: 'inv-field' }, [h('span', { text: 'File (PDF or image)' }), h('div', { class: 'conf-row' }, [h('label', { class: 'conf-btn' }, [lbl, file]), link, status])])
+      ]),
+      hidden
+    ]);
+  }
   function readCards(containerId, type) {
     var arr = [];
     Array.prototype.forEach.call(document.querySelectorAll('#' + containerId + ' .itin-card'), function (c) {
@@ -2511,6 +2564,9 @@
       var conf = ((c.querySelector('.e-conf-img') || {}).value || '').trim() || null;
       if (type === 'hotel') { var n = vcard(c, '.h-name'); if (!n) return; var board = ((c.querySelector('.h-board-wrap .ss input[type=hidden]') || {}).value || ''); arr.push({ name: n, location: vcard(c, '.h-location'), address: vcard(c, '.h-address'), checkin_date: vcard(c, '.h-cin-date') || null, checkin_time: vcard(c, '.h-cin-time') || null, checkout_date: vcard(c, '.h-cout-date') || null, checkout_time: vcard(c, '.h-cout-time') || null, room: vcard(c, '.h-room'), confirmation: vcard(c, '.h-conf'), board: (board && board !== 'Not specified') ? board : null, rooms: vcard(c, '.h-rooms'), phone: vcard(c, '.h-phone'), notes: vcard(c, '.h-notes'), image_url: img, confirmation_image: conf }); }
       else if (type === 'transport') { var hasAny = vcard(c, '.t-from') || vcard(c, '.t-to') || vcard(c, '.t-date'); if (!hasAny) return; var tt = (c.querySelector('.ss input[type=hidden]') || {}).value || ''; arr.push({ type: tt, date: vcard(c, '.t-date') || null, time: vcard(c, '.t-time') || null, from: vcard(c, '.t-from'), to: vcard(c, '.t-to'), driver: vcard(c, '.t-driver'), car: vcard(c, '.t-car'), plate: vcard(c, '.t-plate'), company: vcard(c, '.t-company'), phone: vcard(c, '.t-phone'), confirmation: vcard(c, '.t-conf'), notes: vcard(c, '.t-notes'), image_url: img, confirmation_image: conf }); }
+      else if (type === 'cruise') { var cl = vcard(c, '.c-line'), cs = vcard(c, '.c-ship'); if (!cl && !cs) return; arr.push({ line: cl, ship: cs, cabin: vcard(c, '.c-cabin'), deck: vcard(c, '.c-deck'), embark_port: vcard(c, '.c-eport'), embark_date: vcard(c, '.c-edate') || null, embark_time: vcard(c, '.c-etime') || null, disembark_port: vcard(c, '.c-dport'), disembark_date: vcard(c, '.c-ddate') || null, disembark_time: vcard(c, '.c-dtime') || null, confirmation: vcard(c, '.c-conf'), phone: vcard(c, '.c-phone'), notes: vcard(c, '.c-notes'), image_url: img, confirmation_image: conf }); }
+      else if (type === 'day') { var dd = vcard(c, '.d-date'), dt2 = vcard(c, '.d-title'), db = vcard(c, '.d-body'); if (!dd && !dt2 && !db) return; arr.push({ date: dd || null, title: dt2, body: db }); }
+      else if (type === 'doc') { var du = ((c.querySelector('.doc-url') || {}).value || '').trim(); if (!du) return; arr.push({ name: vcard(c, '.doc-name') || 'Document', url: du }); }
       else { var en = vcard(c, '.e-name'); if (!en) return; var cat = (c.querySelector('.ss input[type=hidden]') || {}).value || ''; arr.push({ name: en, category: cat, kind: type === 'dining' ? 'dining' : 'experience', date: vcard(c, '.e-date') || null, time: vcard(c, '.e-time') || null, location: vcard(c, '.e-location'), address: vcard(c, '.e-address'), confirmation: vcard(c, '.e-conf'), party: vcard(c, '.e-party'), phone: vcard(c, '.e-phone'), notes: vcard(c, '.e-notes'), image_url: img, confirmation_image: conf }); }
     });
     return arr;
@@ -2599,7 +2655,7 @@
   function editItinerary(row) {
     state.docCustomer = findCustomerForDoc(row);
     state.builderTab = 'itinerary';
-    state.itinDraft = { editing_id: row.id, editing_number: row.itinerary_number, title: row.title || '', destination: row.destination || '', trip_type: row.trip_type || null, start_date: row.start_date || null, end_date: row.end_date || null, pax_adults: row.pax_adults != null ? row.pax_adults : 1, pax_children: row.pax_children || 0, pax_infants: row.pax_infants || 0, traveler_names: row.traveler_names || '', segments: row.segments || [], hotels: row.hotels || [], transport: row.transport || [], entertainment: row.entertainment || [], notes: row.notes || '', total_charged: row.total_charged || null, comparable_total: row.comparable_total || null, currency: row.currency || 'USD', price_invoice_number: row.price_invoice_number || null, city_images: row.city_images || null };
+    state.itinDraft = { editing_id: row.id, editing_number: row.itinerary_number, title: row.title || '', destination: row.destination || '', trip_type: row.trip_type || null, start_date: row.start_date || null, end_date: row.end_date || null, pax_adults: row.pax_adults != null ? row.pax_adults : 1, pax_children: row.pax_children || 0, pax_infants: row.pax_infants || 0, traveler_names: row.traveler_names || '', segments: row.segments || [], hotels: row.hotels || [], transport: row.transport || [], entertainment: row.entertainment || [], cruises: row.cruises || [], day_notes: row.day_notes || [], documents: row.documents || [], notes: row.notes || '', total_charged: row.total_charged || null, comparable_total: row.comparable_total || null, currency: row.currency || 'USD', price_invoice_number: row.price_invoice_number || null, city_images: row.city_images || null };
     state.itinFlash = { kind: 'note', text: 'Editing ' + (row.itinerary_number || 'this itinerary') + '. Make your changes (photos too), then review & resend — it updates the version in their account.' };
     state.itinView = 'form'; state.tab = 'itineraries'; refreshNav(); renderTab();
   }
@@ -2630,6 +2686,9 @@
       itinSection('Transportation', 'itin-transport', (d.transport || []).map(transportCard), '+ Add transport', function () { var c = transportCard(); document.getElementById('itin-transport').appendChild(c); initDatePickers(c); }),
       itinSection('Dining', 'itin-dining', (d.entertainment || []).filter(function (x) { return x.kind === 'dining'; }).map(diningCard), '+ Add dining', function () { var c = diningCard(); document.getElementById('itin-dining').appendChild(c); initDatePickers(c); }),
       itinSection('Entertainment', 'itin-ent', (d.entertainment || []).filter(function (x) { return x.kind !== 'dining'; }).map(entCard), '+ Add experience', function () { var c = entCard(); document.getElementById('itin-ent').appendChild(c); initDatePickers(c); }),
+      itinSection('Cruises', 'itin-cruises', (d.cruises || []).map(cruiseCard), '+ Add cruise', function () { var c = cruiseCard(); document.getElementById('itin-cruises').appendChild(c); initDatePickers(c); }),
+      itinSection('Day by day (optional)', 'itin-days', (d.day_notes || []).map(dayCard), '+ Add a day note', function () { var c = dayCard(); document.getElementById('itin-days').appendChild(c); initDatePickers(c); }),
+      itinSection('Travel documents (optional)', 'itin-docs', (d.documents || []).map(docCard), '+ Add document', function () { var c = docCard(); document.getElementById('itin-docs').appendChild(c); }),
       h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'Pricing & savings (optional)' }),
         h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: "Powers the savings figure on the customer's beautiful itinerary. Pull it from an invoice, or type it in." }),
@@ -2649,7 +2708,7 @@
   function collectItin() {
     var pa = parseInt(val('itin-adults'), 10); if (isNaN(pa)) pa = 0;
     var pc = parseInt(val('itin-children'), 10) || 0, pi = parseInt(val('itin-infants'), 10) || 0;
-    return { customer: state.docCustomer, title: val('itin-title'), destination: val('itin-dest'), start_date: val('itin-start') || null, end_date: val('itin-end') || null, pax_adults: pa, pax_children: pc, pax_infants: pi, passengers: (pa + pc + pi) || 1, traveler_names: val('itin-names') || null, trip_type: readTripType(), segments: readSegments(), hotels: readCards('itin-hotels', 'hotel'), transport: readCards('itin-transport', 'transport'), entertainment: readCards('itin-dining', 'dining').concat(readCards('itin-ent', 'ent')), notes: val('itin-notes'), total_charged: parseFloat(val('itin-total')) || null, comparable_total: parseFloat(val('itin-comp')) || null, currency: val('itin-cur') || (state.settings && state.settings.default_currency) || 'USD', price_invoice_number: val('itin-pull-inv') || null };
+    return { customer: state.docCustomer, title: val('itin-title'), destination: val('itin-dest'), start_date: val('itin-start') || null, end_date: val('itin-end') || null, pax_adults: pa, pax_children: pc, pax_infants: pi, passengers: (pa + pc + pi) || 1, traveler_names: val('itin-names') || null, trip_type: readTripType(), segments: readSegments(), hotels: readCards('itin-hotels', 'hotel'), transport: readCards('itin-transport', 'transport'), entertainment: readCards('itin-dining', 'dining').concat(readCards('itin-ent', 'ent')), cruises: readCards('itin-cruises', 'cruise'), day_notes: readCards('itin-days', 'day'), documents: readCards('itin-docs', 'doc'), notes: val('itin-notes'), total_charged: parseFloat(val('itin-total')) || null, comparable_total: parseFloat(val('itin-comp')) || null, currency: val('itin-cur') || (state.settings && state.settings.default_currency) || 'USD', price_invoice_number: val('itin-pull-inv') || null };
   }
   async function pullInvoicePricing() {
     var num = (val('itin-pull-inv') || '').trim(), status = document.getElementById('itin-pull-status');
@@ -2692,7 +2751,7 @@
     return { settings: state.settings || {}, profile: { first_name: p.first_name || '', last_name: p.last_name || '' }, itinerary: {
       itinerary_number: 'PREVIEW', title: d.title || null, destination: d.destination || null, trip_type: d.trip_type || null,
       start_date: d.start_date || null, end_date: d.end_date || null, pax_adults: d.pax_adults, pax_children: d.pax_children, pax_infants: d.pax_infants, passengers: d.passengers, traveler_names: d.traveler_names || null,
-      segments: d.segments || [], hotels: d.hotels || [], transport: d.transport || [], entertainment: d.entertainment || [],
+      segments: d.segments || [], hotels: d.hotels || [], transport: d.transport || [], entertainment: d.entertainment || [], cruises: d.cruises || [], day_notes: d.day_notes || [], documents: d.documents || [],
       notes: d.notes || null, total_charged: d.total_charged || null, comparable_total: d.comparable_total || null, currency: d.currency || 'USD',
       city_images: d.city_images || null
     } };
@@ -2827,7 +2886,7 @@
   async function sendItin(btn) {
     var d = state.itinDraft, msg = document.getElementById('rev-msg');
     if (!d || !d.customer) { state.itinView = 'form'; renderTab(); return; }
-    var payload = { customer_email: d.customer.email, account_number: d.customer.account_number || null, user_id: d.customer.id, title: d.title || null, destination: d.destination || null, trip_type: d.trip_type || null, start_date: d.start_date, end_date: d.end_date, passengers: d.passengers, pax_adults: d.pax_adults, pax_children: d.pax_children, pax_infants: d.pax_infants, traveler_names: d.traveler_names || null, segments: d.segments, hotels: d.hotels, transport: d.transport, entertainment: d.entertainment, notes: d.notes || null, total_charged: d.total_charged, comparable_total: d.comparable_total, price_invoice_number: d.price_invoice_number || null, city_images: (d.city_images && Object.keys(d.city_images).length) ? d.city_images : null };
+    var payload = { customer_email: d.customer.email, account_number: d.customer.account_number || null, user_id: d.customer.id, title: d.title || null, destination: d.destination || null, trip_type: d.trip_type || null, start_date: d.start_date, end_date: d.end_date, passengers: d.passengers, pax_adults: d.pax_adults, pax_children: d.pax_children, pax_infants: d.pax_infants, traveler_names: d.traveler_names || null, segments: d.segments, hotels: d.hotels, transport: d.transport, entertainment: d.entertainment, cruises: d.cruises || [], day_notes: d.day_notes || [], documents: d.documents || [], notes: d.notes || null, total_charged: d.total_charged, comparable_total: d.comparable_total, price_invoice_number: d.price_invoice_number || null, city_images: (d.city_images && Object.keys(d.city_images).length) ? d.city_images : null };
     var editing = !!d.editing_id;
     btn.disabled = true; btn.textContent = editing ? 'Updating…' : 'Sending…';
     var r;
@@ -2847,7 +2906,7 @@
      generate one itinerary per pod (its own flights + the shared middle), all under
      the same account (one shared login) OR a linked group (separate logins). */
   function gtBlank() {
-    return { view: 'list', editing_id: null, target_kind: 'account', customer: null, group: null, groups: null, name: '', title: '', destination: '', start_date: null, end_date: null, currency: (state.settings && state.settings.default_currency) || 'USD', total_charged: null, comparable_total: null, price_invoice_number: null, notes: '', shared: { segments: [], trip_type: null, hotels: [], transport: [], entertainment: [] }, city_images: null, pods: [], podDraft: null, podIndex: null };
+    return { view: 'list', editing_id: null, target_kind: 'account', customer: null, group: null, groups: null, name: '', title: '', destination: '', start_date: null, end_date: null, currency: (state.settings && state.settings.default_currency) || 'USD', total_charged: null, comparable_total: null, price_invoice_number: null, notes: '', shared: { segments: [], trip_type: null, hotels: [], transport: [], entertainment: [], cruises: [], day_notes: [], documents: [] }, city_images: null, pods: [], podDraft: null, podIndex: null };
   }
   function tabGroupTrips() {
     if (!state.gt) state.gt = gtBlank();
@@ -2965,7 +3024,7 @@
     if (document.getElementById('inv-segs')) {
       /* firstCanConnect: the first shared flight (e.g. Istanbul -> Destination 1) may be marked a
          connection, because after generation it follows each group's arrival into the meeting city */
-      g.shared = { segments: readLegsFrom(document.getElementById('inv-segs'), true), trip_type: readTripType(), hotels: readCards('itin-hotels', 'hotel'), transport: readCards('itin-transport', 'transport'), entertainment: readCards('itin-dining', 'dining').concat(readCards('itin-ent', 'ent')) };
+      g.shared = { segments: readLegsFrom(document.getElementById('inv-segs'), true), trip_type: readTripType(), hotels: readCards('itin-hotels', 'hotel'), transport: readCards('itin-transport', 'transport'), entertainment: readCards('itin-dining', 'dining').concat(readCards('itin-ent', 'ent')), cruises: readCards('itin-cruises', 'cruise'), day_notes: readCards('itin-days', 'day'), documents: readCards('itin-docs', 'doc') };
       g.destination = gtDeriveDest(g.shared.segments); /* auto from the shared flights, no field to fill */
     }
     var itinEls = document.querySelectorAll('.gt-itin');
@@ -3029,7 +3088,10 @@
         itinSection('Hotels', 'itin-hotels', (g.shared.hotels || []).map(hotelCard), '+ Add hotel', function () { var c = hotelCard(); document.getElementById('itin-hotels').appendChild(c); initDatePickers(c); }, true),
         itinSection('Transfers', 'itin-transport', (g.shared.transport || []).map(transportCard), '+ Add transfer', function () { var c = transportCard(); document.getElementById('itin-transport').appendChild(c); initDatePickers(c); }, true),
         itinSection('Dining', 'itin-dining', (g.shared.entertainment || []).filter(function (x) { return x.kind === 'dining'; }).map(diningCard), '+ Add dining', function () { var c = diningCard(); document.getElementById('itin-dining').appendChild(c); initDatePickers(c); }, true),
-        itinSection('Experiences', 'itin-ent', (g.shared.entertainment || []).filter(function (x) { return x.kind !== 'dining'; }).map(entCard), '+ Add experience', function () { var c = entCard(); document.getElementById('itin-ent').appendChild(c); initDatePickers(c); }, true)
+        itinSection('Experiences', 'itin-ent', (g.shared.entertainment || []).filter(function (x) { return x.kind !== 'dining'; }).map(entCard), '+ Add experience', function () { var c = entCard(); document.getElementById('itin-ent').appendChild(c); initDatePickers(c); }, true),
+        itinSection('Cruises', 'itin-cruises', (g.shared.cruises || []).map(cruiseCard), '+ Add cruise', function () { var c = cruiseCard(); document.getElementById('itin-cruises').appendChild(c); initDatePickers(c); }, true),
+        itinSection('Day by day', 'itin-days', (g.shared.day_notes || []).map(dayCard), '+ Add a day note', function () { var c = dayCard(); document.getElementById('itin-days').appendChild(c); initDatePickers(c); }, true),
+        itinSection('Documents', 'itin-docs', (g.shared.documents || []).map(docCard), '+ Add document', function () { var c = docCard(); document.getElementById('itin-docs').appendChild(c); }, true)
       ]),
       h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'Fill in each itinerary' }),
@@ -3196,7 +3258,7 @@
         title: (pod.title || g.name || pod.label), destination: g.destination || null, trip_type: 'multi',
         start_date: dates.start, end_date: dates.end,
         passengers: pax, pax_adults: pax, pax_children: 0, pax_infants: 0,
-        segments: composed, hotels: g.shared.hotels || [], transport: g.shared.transport || [], entertainment: g.shared.entertainment || [],
+        segments: composed, hotels: g.shared.hotels || [], transport: g.shared.transport || [], entertainment: g.shared.entertainment || [], cruises: g.shared.cruises || [], day_notes: g.shared.day_notes || [], documents: g.shared.documents || [],
         notes: g.notes || null, total_charged: (pod.total != null ? pod.total : g.total_charged), comparable_total: (pod.comp != null ? pod.comp : g.comparable_total), currency: g.currency || 'USD',
         price_invoice_number: g.price_invoice_number || null, city_images: (g.city_images && Object.keys(g.city_images).length) ? g.city_images : null
       };

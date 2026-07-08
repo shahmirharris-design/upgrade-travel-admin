@@ -1919,3 +1919,16 @@ html.acct-modal-open, body.acct-modal-open{ overflow:hidden; }
 .bv-checkin{ display:inline-block; margin:6px 0 2px; font-size:12.5px; font-weight:600; color:#C9A24B; text-decoration:underline; text-underline-offset:3px; }
 .bv-checkin:hover{ color:#E8CE8F; }
 .ld-party{ margin:-16px 0 26px; font-size:13.5px; font-style:italic; color:#5A5142; }
+
+/* Release B: day-by-day notes, documents, cruise */
+.bv-day{ display:grid; grid-template-columns:150px 1fr; gap:20px; padding:20px 0; border-bottom:1px solid rgba(201,162,75,.16); }
+.bv-day:last-child{ border-bottom:0; }
+.bv-day-date{ font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:#C9A24B; font-weight:600; padding-top:5px; }
+.bv-day-title{ font-size:22px; margin:0 0 6px; color:#F4EDDF; }
+.bv-day-text{ margin:0; font-size:14.5px; line-height:1.7; color:#C7B79A; white-space:pre-line; }
+.bv-docs{ display:flex; flex-wrap:wrap; gap:12px; }
+.bv-doc{ display:inline-flex; align-items:center; gap:10px; padding:13px 18px; border:1px solid rgba(201,162,75,.4); border-radius:11px; color:#F4EDDF; font-size:14px; font-weight:500; text-decoration:none; background:rgba(201,162,75,.08); }
+.bv-doc:hover{ border-color:#C9A24B; background:rgba(201,162,75,.16); }
+.bv-doc-ic{ color:#C9A24B; flex:none; }
+.ld-day .ld-day-title{ margin:2px 0 6px; font-weight:600; font-size:15px; color:#211B12; }
+@media (max-width: 640px){ .bv-day{ grid-template-columns:1fr; gap:6px; } }

@@ -672,6 +672,26 @@
     ldConf(kids, x);
     return ldCard(no, x.name || 'Experience', x.category || (x.kind === 'dining' ? 'Dining' : 'Experience'), kids);
   }
+  function ldCruiseCard(no, x) {
+    var kids = [ldPills([
+      ['Embarks', [x.embark_port, x.embark_date ? fmtDate(x.embark_date) : '', x.embark_time ? fmtTime(x.embark_time) : ''].filter(Boolean).join(' · ')],
+      ['Disembarks', [x.disembark_port, x.disembark_date ? fmtDate(x.disembark_date) : '', x.disembark_time ? fmtTime(x.disembark_time) : ''].filter(Boolean).join(' · ')],
+      ['Suite', x.cabin || ''],
+      ['Deck and cabin', x.deck || ''],
+      ['Booking', x.confirmation || ''],
+      ['Phone', x.phone || '']
+    ])];
+    if (x.notes) kids.push(h('p', { class: 'ld-prose', text: x.notes }));
+    ldConf(kids, x);
+    return ldCard(no, x.ship || 'Your cruise', x.line || 'Cruise', kids);
+  }
+  function ldDayCard(x) {
+    return h('div', { class: 'ld-note ld-day' }, [
+      h('div', { class: 'ld-sumlabel', text: x.date ? fmtDate(x.date) : 'Your day' }),
+      x.title ? h('p', { class: 'ld-day-title', text: x.title }) : null,
+      x.body ? h('p', { class: 'ld-prose', text: x.body }) : null
+    ]);
+  }
   function ldBanner(city) {
     return h('section', { class: 'ld-banner' }, [
       h('div', { class: 'ld-banner-img bv-ph', 'data-city': city.city || '' }),
@@ -786,7 +806,11 @@
       else if (ev.type === 'transport') doc.appendChild(ldTransportCard(++no, ev.x));
       else if (ev.type === 'ent') doc.appendChild(ldEntCard(++no, ev.x));
     });
+    if (it.cruises && it.cruises.length) { doc.appendChild(h('div', { class: 'ld-group-label', text: 'The Voyage' })); it.cruises.forEach(function (cx) { doc.appendChild(ldCruiseCard(++no, cx)); }); }
+    var ldDN = (it.day_notes || []).slice().sort(function (a, b) { return ('' + (a.date || '')).localeCompare('' + (b.date || '')); });
+    if (ldDN.length) { doc.appendChild(h('div', { class: 'ld-group-label', text: 'Day by Day' })); ldDN.forEach(function (dx) { doc.appendChild(ldDayCard(dx)); }); }
     if (it.notes) doc.appendChild(h('div', { class: 'ld-note' }, [h('div', { class: 'ld-sumlabel', text: 'From your specialist' }), h('p', { text: it.notes })]));
+    if (it.documents && it.documents.length) doc.appendChild(h('div', { class: 'ld-note' }, [h('div', { class: 'ld-sumlabel', text: 'Travel documents' }), h('p', { class: 'ld-prose', text: it.documents.map(function (dz) { return dz.name; }).filter(Boolean).join('  ·  ') + '. Open them any time from your online itinerary.' })]));
     doc.appendChild(h('p', { class: 'ld-disclaimer', text: itinDisclaimer() }));
     doc.appendChild(ldFooter(it.itinerary_number));
     return doc;
@@ -807,6 +831,69 @@
       makeDocPDF(holder.firstChild, itinPdfName(it), 'save', LD_PDF);
       setTimeout(function () { if (holder.parentNode) holder.parentNode.removeChild(holder); if (btn) { btn.disabled = false; btn.textContent = t0; } }, 1500);
     }, 300);
+  }
+  /* "Add to calendar" export: one .ics file with every flight, stay and reservation */
+  function icsEsc(t) { return ('' + (t || '')).split('\\').join('\\\\').split(';').join('\\;').split(',').join('\\,').split('\n').join('\\n'); }
+  function icsDT(date, time) {
+    var d = ('' + (date || '')).split('-').join(''); if (d.length !== 8) return '';
+    var m = ('' + (time || '')).match(/(\d{1,2}):(\d{2})/);
+    return d + 'T' + (m ? ('0' + m[1]).slice(-2) + m[2] + '00' : '090000');
+  }
+  function icsPlusHours(date, time, hrs) {
+    var m = ('' + (time || '')).match(/(\d{1,2}):(\d{2})/);
+    var dt = new Date(date + 'T' + (m ? ('0' + m[1]).slice(-2) + ':' + m[2] : '09:00') + ':00');
+    if (isNaN(dt)) return '';
+    dt.setTime(dt.getTime() + hrs * 3600000);
+    function p2(n) { return ('0' + n).slice(-2); }
+    return '' + dt.getFullYear() + p2(dt.getMonth() + 1) + p2(dt.getDate()) + 'T' + p2(dt.getHours()) + p2(dt.getMinutes()) + '00';
+  }
+  function downloadICS(it) {
+    var lines = [], base = (it.itinerary_number || 'trip') + '-' + (it.id || '');
+    function ev(uid, fields) {
+      lines.push('BEGIN:VEVENT'); lines.push('UID:' + uid + '-' + base + '@flyupgrade.com');
+      fields.forEach(function (f) { if (f && f[1]) lines.push(f[0] + ':' + f[1]); });
+      lines.push('END:VEVENT');
+    }
+    (it.segments || []).forEach(function (s, i) {
+      if (!s.depart_date) return;
+      var start = icsDT(s.depart_date, s.depart_time); if (!start) return;
+      var endDate = s.arrive_date || s.return_date || bvArriveDate(s) || s.depart_date;
+      var end = s.arrive_time ? icsDT(endDate, s.arrive_time) : icsPlusHours(s.depart_date, s.depart_time, 3);
+      ev('flight' + i, [
+        ['DTSTART', start], ['DTEND', end || start],
+        ['SUMMARY', icsEsc('Flight ' + [s.flight_number, ((s.from && s.from.code) || '') + ' to ' + ((s.to && s.to.code) || '')].filter(Boolean).join(', '))],
+        ['LOCATION', icsEsc((s.from && (s.from.name || s.from.city)) || '')],
+        ['DESCRIPTION', icsEsc([s.airline, s.cabin, seatStr(s.seats) ? 'Seats ' + seatStr(s.seats) : '', s.confirmation ? 'Confirmation ' + s.confirmation : ''].filter(Boolean).join(', '))]
+      ]);
+    });
+    (it.hotels || []).forEach(function (x2, i) {
+      if (!x2.checkin_date) return;
+      ev('hotel' + i, [
+        ['DTSTART;VALUE=DATE', x2.checkin_date.split('-').join('')],
+        ['DTEND;VALUE=DATE', (x2.checkout_date || x2.checkin_date).split('-').join('')],
+        ['SUMMARY', icsEsc('Stay: ' + (x2.name || 'Hotel'))],
+        ['LOCATION', icsEsc([x2.address, x2.location].filter(Boolean).join(', '))],
+        ['DESCRIPTION', icsEsc([x2.room, x2.confirmation ? 'Confirmation ' + x2.confirmation : ''].filter(Boolean).join(', '))]
+      ]);
+    });
+    (it.transport || []).forEach(function (x2, i) {
+      if (!x2.date) return; var st = icsDT(x2.date, x2.time); if (!st) return;
+      ev('transfer' + i, [['DTSTART', st], ['DTEND', icsPlusHours(x2.date, x2.time, 1) || st], ['SUMMARY', icsEsc((x2.type || 'Transfer') + (x2.to ? ' to ' + x2.to : ''))], ['LOCATION', icsEsc(x2.from || '')], ['DESCRIPTION', icsEsc([x2.company, x2.driver, x2.car, x2.confirmation ? 'Confirmation ' + x2.confirmation : ''].filter(Boolean).join(', '))]]);
+    });
+    (it.entertainment || []).forEach(function (x2, i) {
+      if (!x2.date) return; var st = icsDT(x2.date, x2.time); if (!st) return;
+      ev('res' + i, [['DTSTART', st], ['DTEND', icsPlusHours(x2.date, x2.time, 2) || st], ['SUMMARY', icsEsc(x2.name || 'Reservation')], ['LOCATION', icsEsc([x2.address, x2.location].filter(Boolean).join(', '))], ['DESCRIPTION', icsEsc([x2.category, x2.confirmation ? 'Confirmation ' + x2.confirmation : ''].filter(Boolean).join(', '))]]);
+    });
+    (it.cruises || []).forEach(function (x2, i) {
+      if (!x2.embark_date) return; var st = icsDT(x2.embark_date, x2.embark_time); if (!st) return;
+      ev('cruise' + i, [['DTSTART', st], ['DTEND', (x2.disembark_date ? icsDT(x2.disembark_date, x2.disembark_time) : '') || st], ['SUMMARY', icsEsc('Cruise: ' + [x2.ship, x2.line].filter(Boolean).join(', '))], ['LOCATION', icsEsc(x2.embark_port || '')], ['DESCRIPTION', icsEsc([x2.cabin, x2.deck, x2.confirmation ? 'Booking ' + x2.confirmation : ''].filter(Boolean).join(', '))]]);
+    });
+    if (!lines.length) return;
+    var ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Upgrade Travel//Itinerary//EN', 'CALSCALE:GREGORIAN'].concat(lines, ['END:VCALENDAR']).join('\r\n');
+    var blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    var a = h('a', { href: URL.createObjectURL(blob), download: ((it.title || 'Trip').split('/').join(' ').trim() || 'Trip') + '.ics' });
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { try { URL.revokeObjectURL(a.href); } catch (e) { } a.remove(); }, 500);
   }
   function itinTripCard(it, coveredBookings, opts) {
     opts = opts || {};
@@ -846,7 +933,8 @@
     card.appendChild(h('div', { class: 'itin-card-foot' }, [
       h('button', { type: 'button', class: 'btn btn-primary', onclick: function () { openBeautiful(it); }, text: 'View itinerary' }),
       h('button', { type: 'button', class: 'btn btn-ghost itin-pdf-btn', onclick: function () { openOverlay(itinDoc(it), itinPdfName(it), LD_PDF); }, text: 'View itinerary PDF' }),
-      h('button', { type: 'button', class: 'btn btn-ghost', onclick: function (e) { downloadItinPDF(it, e.target); }, text: 'Download PDF' })
+      h('button', { type: 'button', class: 'btn btn-ghost', onclick: function (e) { downloadItinPDF(it, e.target); }, text: 'Download PDF' }),
+      h('button', { type: 'button', class: 'btn btn-ghost', onclick: function () { downloadICS(it); }, text: 'Add to calendar' })
     ]));
     return card;
   }
@@ -1803,6 +1891,10 @@
       if (it.transport && it.transport.length) root.appendChild(h('section', { class: 'bv-pad' }, [h('div', { class: 'bv-wrap' }, [secHead('Ground & Transfers', 'Door to door', '')].concat(it.transport.map(bvTransport)))]));
       if (it.entertainment && it.entertainment.length) root.appendChild(h('section', { class: 'bv-pad' }, [h('div', { class: 'bv-wrap' }, [secHead('Experiences & Dining', 'Reserved for you', '')].concat(it.entertainment.map(bvEnt)))]));
     }
+    if (it.cruises && it.cruises.length) root.appendChild(h('section', { class: 'bv-pad' }, [h('div', { class: 'bv-wrap' }, [secHead('The Voyage', it.cruises.length === 1 ? 'Your cruise' : 'Your cruises', '')].concat(it.cruises.map(bvCruise)))]));
+    var bvDayNotes = (it.day_notes || []).slice().sort(function (a, b) { return ('' + (a.date || '')).localeCompare('' + (b.date || '')); });
+    if (bvDayNotes.length) root.appendChild(h('section', { class: 'bv-pad' }, [h('div', { class: 'bv-wrap' }, [secHead('Day by Day', 'Your days, planned', '')].concat(bvDayNotes.map(bvDay)))]));
+    if (it.documents && it.documents.length) root.appendChild(h('section', { class: 'bv-pad' }, [h('div', { class: 'bv-wrap' }, [secHead('Your Documents', 'Everything you might be asked for', 'Tap to open. Keep these handy at check-in and border control.'), h('div', { class: 'bv-docs' }, it.documents.map(bvDoc))])]));
     /* footer */
     root.appendChild(h('footer', { class: 'bv-footer' }, [h('div', { class: 'bv-wrap' }, [
       h('div', { class: 'bv-brand serif', text: agencyName() }),
@@ -1812,6 +1904,42 @@
       h('p', { class: 'bv-fine', text: 'Itinerary ' + (it.itinerary_number || '') })
     ])]));
     return root;
+  }
+  function bvCruise(x) {
+    var meta = [];
+    var emb = [x.embark_port, x.embark_date ? fmtDate(x.embark_date) : '', x.embark_time ? fmtTime(x.embark_time) : ''].filter(Boolean).join('  ·  ');
+    var dis = [x.disembark_port, x.disembark_date ? fmtDate(x.disembark_date) : '', x.disembark_time ? fmtTime(x.disembark_time) : ''].filter(Boolean).join('  ·  ');
+    if (emb) meta.push(['Embarks', emb]);
+    if (dis) meta.push(['Disembarks', dis]);
+    if (x.cabin) meta.push(['Suite', x.cabin]);
+    if (x.deck) meta.push(['Deck and cabin', x.deck]);
+    if (x.confirmation) meta.push(['Booking', x.confirmation]);
+    if (x.phone) meta.push(['Phone', x.phone]);
+    return h('div', { class: 'bv-item' }, [
+      h('div', { class: 'bv-item-photo bv-ph bv-ph-cruise', 'data-venue': (x.ship || x.line || 'luxury cruise ship'), 'data-venue-cat': 'cruise ship', 'data-venue-city': '', 'data-img': x.image_url || null }),
+      h('div', { class: 'bv-item-body' }, [
+        x.line ? h('span', { class: 'bv-cab', text: x.line }) : null,
+        h('h3', { class: 'bv-item-title serif', text: x.ship || 'Your cruise' }),
+        bvMetaGrid(meta),
+        x.notes ? h('div', { class: 'bv-item-note', text: x.notes }) : null,
+        bvConf(x)
+      ])
+    ]);
+  }
+  function bvDay(x) {
+    return h('div', { class: 'bv-day' }, [
+      h('div', { class: 'bv-day-date', text: x.date ? fmtDate(x.date) : '' }),
+      h('div', { class: 'bv-day-body' }, [
+        x.title ? h('h3', { class: 'bv-day-title serif', text: x.title }) : null,
+        x.body ? h('p', { class: 'bv-day-text', text: x.body }) : null
+      ])
+    ]);
+  }
+  function bvDoc(x) {
+    return h('a', { class: 'bv-doc', href: x.url, target: '_blank', rel: 'noopener' }, [
+      sv('svg', { class: 'bv-doc-ic', viewBox: '0 0 24 24', width: '18', height: '18', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' }, [sv('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }), sv('polyline', { points: '14 2 14 8 20 8' })]),
+      h('span', { text: x.name || 'Document' })
+    ]);
   }
   function secHead(eyebrow, title, sub) { var k = [h('span', { class: 'bv-eyebrow', text: eyebrow }), h('h2', { class: 'serif', text: title })]; if (sub) k.push(h('p', { text: sub })); return h('div', { class: 'bv-sec-head' }, k); }
   function joinGold(arr) { var out = []; arr.forEach(function (a, i) { if (i > 0) out.push(h('span', { class: 'bv-gold', text: ' → ' })); out.push(h('span', { class: 'bv-city', text: a })); }); return out; }
