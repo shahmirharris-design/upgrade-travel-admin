@@ -303,52 +303,127 @@
     var res = await Promise.all([
       sb.from('profiles').select('id', { count: 'exact', head: true }),
       sb.from('quote_requests').select('status, created_at'),
-      sb.from('quotes').select('status, total_charged'),
-      sb.from('invoices').select('total_charged, comparable_total, created_at'),
-      sb.from('itineraries').select('id', { count: 'exact', head: true }),
+      sb.from('quotes').select('*').order('created_at', { ascending: false }).limit(400),
+      sb.from('invoices').select('*').order('created_at', { ascending: false }).limit(400),
+      sb.from('itineraries').select('*').eq('status', 'sent').order('created_at', { ascending: false }).limit(300),
       sb.from('tasks').select('*').eq('done', false).order('due_date', { ascending: true, nullsFirst: false })
     ]);
     dash = document.getElementById('dash'); if (!dash) return;
     var custCount = res[0].count || 0;
-    var reqs = res[1].data || [], quotes = res[2].data || [], invoices = res[3].data || [];
-    var itinCount = res[4].count || 0, ym = curYM();
+    var reqs = res[1].data || [], quotes = res[2].data || [], invoices = res[3].data || [], its = res[4].data || [];
+    var ym = curYM(), today = todayISO();
     var newReqs = 0, monthReqs = 0;
     reqs.forEach(function (r) { if (r.status === 'new') newReqs++; if ((r.created_at || '').slice(0, 7) === ym) monthReqs++; });
     var qSent = 0, qAcc = 0, qDec = 0, pipeline = 0;
     quotes.forEach(function (q) { if (q.status === 'accepted') qAcc++; else if (q.status === 'declined') qDec++; else { qSent++; pipeline += dnum(q.total_charged); } });
     var decided = qAcc + qDec, acceptRate = decided ? Math.round((qAcc / decided) * 100) : 0;
-    var revenue = 0, saved = 0, mRevenue = 0;
-    invoices.forEach(function (inv) { var t = dnum(inv.total_charged); revenue += t; var c = dnum(inv.comparable_total); if (c > t) saved += (c - t); if ((inv.created_at || '').slice(0, 7) === ym) mRevenue += t; });
-    var invCount = invoices.length, avgInv = invCount ? revenue / invCount : 0;
+    var revenue = 0, saved = 0, mRevenue = 0, outstanding = 0, overdue = [];
+    invoices.forEach(function (inv) {
+      var t = dnum(inv.total_charged); revenue += t;
+      var c = dnum(inv.comparable_total); if (c > t) saved += (c - t);
+      if ((inv.created_at || '').slice(0, 7) === ym) mRevenue += t;
+      var b = t - dnum(inv.amount_paid);
+      if (b > 0.001) { outstanding += b; if (inv.due_date && inv.due_date < today) overdue.push(inv); }
+    });
+    var invCount = invoices.length;
+    var expiring = quotes.filter(function (q) { return (q.status || 'sent') === 'sent' && q.valid_until && q.valid_until >= today && q.valid_until <= addDays(today, 3); });
+    var departing = its.filter(function (it) { return it.start_date && it.start_date >= today && it.start_date <= addDays(today, 3); });
+    /* last six months of billing, and how much of it has been collected */
+    var months = [], byM = {};
+    for (var mi = 5; mi >= 0; mi--) { var d0 = new Date(); d0.setMonth(d0.getMonth() - mi, 1); var k0 = d0.getFullYear() + '-' + ('0' + (d0.getMonth() + 1)).slice(-2); months.push(k0); byM[k0] = { billed: 0, paid: 0 }; }
+    invoices.forEach(function (inv) { var k = (inv.created_at || '').slice(0, 7); if (byM[k]) { var t = dnum(inv.total_charged); byM[k].billed += t; byM[k].paid += Math.min(dnum(inv.amount_paid), t); } });
 
     dash.textContent = '';
-    var tw = dashTasksWidget(res[5].data || [], todayISO()); if (tw) dash.appendChild(tw);
     dash.appendChild(h('div', { class: 'dash-row dash-hero' }, [
       statCard('Revenue billed', money(revenue, 'USD'), 'This month ' + money(mRevenue, 'USD'), 'gold', function () { gotoDocList('invoices'); }),
-      statCard('Saved for clients', money(saved, 'USD'), 'across ' + invCount + ' invoice' + (invCount === 1 ? '' : 's'), 'green', function () { gotoDocList('invoices'); }),
-      statCard('Customers', String(custCount), 'with an account', null, function () { state.tab = 'customers'; refreshNav(); renderTab(); }),
-      statCard('Open requests', String(newReqs), newReqs ? 'awaiting a quote' : 'all caught up', newReqs ? 'amber' : null, function () { gotoDocList('quotes', 'requests'); })
+      statCard('Outstanding', money(outstanding, 'USD'), overdue.length ? overdue.length + ' invoice' + (overdue.length > 1 ? 's' : '') + ' overdue' : 'nothing overdue', overdue.length ? 'amber' : null, function () { gotoDocList('invoices'); }),
+      statCard('Pipeline', money(pipeline, 'USD'), 'in ' + qSent + ' open quote' + (qSent === 1 ? '' : 's'), null, function () { gotoDocList('quotes'); }),
+      statCard('Saved for clients', money(saved, 'USD'), 'across ' + invCount + ' invoice' + (invCount === 1 ? '' : 's'), 'green', function () { state.tab = 'reports'; refreshNav(); renderTab(); })
     ]));
-    var perf = h('div', { class: 'dash-panel' }, [
-      h('div', { class: 'dash-panel-h', text: 'Quotes' }),
-      h('div', { class: 'dash-funnel' }, [funnelStat('Pending', qSent, null), funnelStat('Accepted', qAcc, 'green'), funnelStat('Declined', qDec, 'red')]),
-      h('div', { class: 'dash-rate' }, [
-        h('div', { class: 'dash-rate-top' }, [h('span', { text: 'Acceptance rate' }), h('b', { text: decided ? acceptRate + '%' : '—' })]),
-        h('div', { class: 'dash-rate-bar' }, [h('div', { class: 'dash-rate-fill', style: 'width:' + (decided ? acceptRate : 0) + '%' })])
-      ])
+    var left = h('div', { class: 'dash-left' }, [
+      dashChart(months, byM),
+      dashAttention(newReqs, expiring, overdue, departing)
     ]);
-    var side = h('div', { class: 'dash-side' }, [
-      statCard('Pipeline', money(pipeline, 'USD'), 'in ' + qSent + ' open quote' + (qSent === 1 ? '' : 's'), null),
-      statCard('Itineraries', String(itinCount), 'trips planned', null)
-    ]);
-    dash.appendChild(h('div', { class: 'dash-row dash-2col' }, [perf, side]));
+    var tw = dashTasksWidget(res[5].data || [], today);
+    var side = h('div', { class: 'dash-side' }, [tw, dashWeekPanel(its, quotes, invoices, today)]);
+    dash.appendChild(h('div', { class: 'dash-row dash-2col' }, [left, side]));
     dash.appendChild(h('div', { class: 'dash-row dash-mini' }, [
-      statCard('Invoices', String(invCount), 'avg ' + money(avgInv, 'USD'), null),
-      statCard('Quote requests', String(reqs.length), monthReqs + ' this month', null),
-      statCard('Total quotes', String(quotes.length), qAcc + ' won · ' + qDec + ' lost', null),
-      statCard('Avg saved / trip', money(invCount ? saved / invCount : 0, 'USD'), 'per invoice', null)
+      statCard('Customers', String(custCount), monthReqs ? monthReqs + ' request' + (monthReqs > 1 ? 's' : '') + ' this month' : 'with an account', null, function () { state.tab = 'customers'; refreshNav(); renderTab(); }),
+      statCard('Trips planned', String(its.length), 'itineraries in accounts', null, function () { gotoDocList('itineraries'); }),
+      statCard('Quotes', qAcc + ' won · ' + qDec + ' lost', decided ? acceptRate + '% acceptance' : 'no decisions yet', null, function () { gotoDocList('quotes'); }),
+      statCard('Avg saved / trip', money(invCount ? saved / invCount : 0, 'USD'), 'per invoice', null, null)
     ]));
     dash.appendChild(h('button', { type: 'button', class: 'dash-refresh', onclick: loadDashboard, text: '↻ Refresh' }));
+  }
+  function fmtK(n) { return n >= 1000 ? (Math.round(n / 100) / 10) + 'k' : String(Math.round(n)); }
+  function dashChart(months, byM) {
+    var max = 1, any = false;
+    months.forEach(function (k) { if (byM[k].billed > max) max = byM[k].billed; if (byM[k].billed > 0) any = true; });
+    var bars = months.map(function (k) {
+      var b = byM[k];
+      var hB = Math.max(Math.round(b.billed / max * 128), b.billed > 0 ? 4 : 2);
+      var pctPaid = b.billed > 0 ? Math.round(b.paid / b.billed * 100) : 0;
+      var lab = new Date(k + '-01T00:00:00').toLocaleString('en-US', { month: 'short' });
+      return h('div', { class: 'dash-bar', title: lab + ': ' + money(b.billed, 'USD') + ' billed · ' + money(b.paid, 'USD') + ' collected' }, [
+        h('div', { class: 'dash-bar-v', text: b.billed > 0 ? '$' + fmtK(b.billed) : '' }),
+        h('div', { class: 'dash-bar-col' }, [h('div', { class: 'dash-bar-billed', style: 'height:' + hB + 'px' }, [h('div', { class: 'dash-bar-paid', style: 'height:' + pctPaid + '%' })])]),
+        h('div', { class: 'dash-bar-l', text: lab })
+      ]);
+    });
+    return h('div', { class: 'dash-panel' }, [
+      h('div', { class: 'dash-panel-h', text: 'Revenue · last 6 months' }),
+      any ? h('div', { class: 'dash-chart' }, bars) : h('p', { class: 'dash-empty', text: 'Send your first invoice and the chart starts here.' }),
+      any ? h('div', { class: 'dash-chart-key' }, [h('span', { class: 'dash-key dash-key--paid', text: 'Collected' }), h('span', { class: 'dash-key dash-key--billed', text: 'Billed' })]) : null
+    ]);
+  }
+  function attRow(cls, text, action, onOpen) {
+    return h('button', { type: 'button', class: 'dash-att', onclick: onOpen }, [
+      h('span', { class: 'dash-att-dot dash-att-dot--' + cls }),
+      h('span', { class: 'dash-att-t', text: text }),
+      h('span', { class: 'dash-att-a', text: action })
+    ]);
+  }
+  function dashAttention(newReqs, expiring, overdue, departing) {
+    var rows = [];
+    if (newReqs) rows.push(attRow('req', newReqs + ' request' + (newReqs > 1 ? 's' : '') + ' waiting for a quote', 'Open inbox', function () { gotoDocList('quotes', 'requests'); }));
+    expiring.slice(0, 3).forEach(function (q) {
+      rows.push(attRow('exp', (q.quote_number || 'Quote') + ' · ' + (findCustomerNameByEmail(q.customer_email) || q.customer_email || '') + ' · expires ' + fmtDate(q.valid_until), q.nudged_at ? 'Nudged ✓' : 'Follow up', function () { adminOverlay(quoteDetail(q), 'Quote ' + (q.quote_number || '')); }));
+    });
+    overdue.slice(0, 3).forEach(function (iv) {
+      var b = Math.max(dnum(iv.total_charged) - dnum(iv.amount_paid), 0);
+      rows.push(attRow('due', (iv.invoice_number || 'Invoice') + ' · ' + money(b, iv.currency || 'USD') + ' overdue since ' + fmtDate(iv.due_date), 'View', function () { adminOverlay(invoiceDetail(iv, (state.invCostMap || {})[iv.id]), 'Invoice ' + (iv.invoice_number || '')); }));
+    });
+    departing.slice(0, 3).forEach(function (it) {
+      var who = (it.traveler_names ? ('' + it.traveler_names).split(/\n|,/)[0] : '') || findCustomerNameByEmail(it.customer_email) || it.customer_email || '';
+      rows.push(attRow('dep', who + ' departs ' + fmtDate(it.start_date) + (it.title ? ' · ' + it.title : ''), 'Itinerary', function () { adminOverlay(itinDetail(it), 'Itinerary ' + (it.itinerary_number || '')); }));
+    });
+    return h('div', { class: 'dash-panel' }, [
+      h('div', { class: 'dash-panel-h', text: 'Needs attention' }),
+      rows.length ? h('div', { class: 'dash-att-list' }, rows) : h('p', { class: 'dash-empty', text: 'All clear. Nothing is waiting on you right now.' })
+    ]);
+  }
+  function dashWeekPanel(its, quotes, invoices, today) {
+    var days = [];
+    for (var i = 0; i < 7; i++) {
+      var d = addDays(today, i), items = [];
+      its.forEach(function (it) {
+        var who = (it.traveler_names ? ('' + it.traveler_names).split(/\n|,/)[0] : '') || findCustomerNameByEmail(it.customer_email) || it.customer_email || '';
+        if (it.start_date === d) items.push(['dep', 'Departs · ' + who, function () { adminOverlay(itinDetail(it), 'Itinerary ' + (it.itinerary_number || '')); }]);
+        if (it.end_date === d) items.push(['ret', 'Returns · ' + who, function () { adminOverlay(itinDetail(it), 'Itinerary ' + (it.itinerary_number || '')); }]);
+      });
+      quotes.forEach(function (q) { if ((q.status || 'sent') === 'sent' && q.valid_until === d) items.push(['exp', 'Quote expires · ' + (findCustomerNameByEmail(q.customer_email) || q.customer_email || ''), function () { adminOverlay(quoteDetail(q), 'Quote ' + (q.quote_number || '')); }]); });
+      invoices.forEach(function (iv) { var b = dnum(iv.total_charged) - dnum(iv.amount_paid); if (b > 0.001 && iv.due_date === d) items.push(['due', money(b, iv.currency || 'USD') + ' due · ' + (findCustomerNameByEmail(iv.customer_email) || iv.customer_email || ''), function () { adminOverlay(invoiceDetail(iv, (state.invCostMap || {})[iv.id]), 'Invoice ' + (iv.invoice_number || '')); }]); });
+      if (items.length) days.push([i, d, items]);
+    }
+    var kids = [h('div', { class: 'dash-panel-h' }, [h('span', { text: 'Next 7 days' }), h('button', { type: 'button', class: 'dash-panel-link', onclick: function () { state.tab = 'calendar'; refreshNav(); renderTab(); }, text: 'Full calendar →' })])];
+    if (!days.length) kids.push(h('p', { class: 'dash-empty', text: 'A quiet week ahead.' }));
+    days.forEach(function (dy) {
+      var label = dy[0] === 0 ? 'Today' : dy[0] === 1 ? 'Tomorrow' : new Date(dy[1] + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      kids.push(h('div', { class: 'dash-day' }, [h('div', { class: 'dash-day-l', text: label })].concat(dy[2].map(function (itx) {
+        return h('button', { type: 'button', class: 'dash-day-item', onclick: itx[2] }, [h('span', { class: 'dash-att-dot dash-att-dot--' + itx[0] }), h('span', { text: itx[1] })]);
+      }))));
+    });
+    return h('div', { class: 'dash-panel' }, kids);
   }
   function statCard(label, value, sub, accent, go) {
     var el = h('div', { class: 'dash-card' + (accent ? ' dash-card--' + accent : '') + (go ? ' dash-card--link' : '') }, [
@@ -363,10 +438,6 @@
     if (tab === 'itineraries') state.itinView = 'list'; else state.docView = view || 'list';
     renderTab();
   }
-  function funnelStat(label, n, accent) {
-    return h('div', { class: 'dash-funnel-c' + (accent ? ' df-' + accent : '') }, [h('div', { class: 'dash-funnel-n', text: String(n) }), h('div', { class: 'dash-funnel-k', text: label })]);
-  }
-  /* ---------- reports ---------- */
   function toCSV(headers, rows) {
     function esc(v) { v = v == null ? '' : ('' + v); if (/^[=+\-@\t\r]/.test(v) && !/^-?\d+(\.\d+)?$/.test(v)) v = "'" + v; return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
     return [headers.map(esc).join(',')].concat(rows.map(function (r) { return r.map(esc).join(','); })).join('\r\n');
