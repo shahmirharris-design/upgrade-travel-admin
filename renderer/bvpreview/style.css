@@ -1095,9 +1095,9 @@ body.modal-open{ overflow:hidden; }
 .chat-panel{ transform-origin:bottom right; opacity:0; transform:translateY(22px) scale(.9); will-change:transform,opacity;
   transition:opacity .16s var(--ease), transform .22s cubic-bezier(.4,0,1,1); }
 .chat-panel.is-open{ opacity:1; transform:none;
-  transition:opacity .3s var(--ease), transform .5s cubic-bezier(.2,1.16,.34,1); }
+  transition:opacity .3s var(--ease), transform .5s cubic-bezier(.22,1,.36,1); }
 .chat-head,.chat-log,.chat-input{ opacity:0; transform:translateY(14px);
-  transition:opacity .28s var(--ease), transform .44s cubic-bezier(.2,1.12,.34,1); }
+  transition:opacity .28s var(--ease), transform .44s cubic-bezier(.22,1,.36,1); }
 .chat-panel.is-open .chat-head{ opacity:1; transform:none; transition-delay:.06s; }
 .chat-panel.is-open .chat-log{ opacity:1; transform:none; transition-delay:.11s; }
 .chat-panel.is-open .chat-input{ opacity:1; transform:none; transition-delay:.16s; }
@@ -1622,7 +1622,7 @@ html.acct-modal-open, body.acct-modal-open{ overflow:hidden; }
 .bv-gli.is-static .bv-gli-city{ font-size:30px; }
 .bv-gli.is-static .bv-gli-detail{ max-height:none; opacity:1; margin-top:8px; }
 .bv-gli-role{ font-size:10px; letter-spacing:.28em; text-transform:uppercase; color:#C9A24B; transition:font-size .5s, opacity .45s, margin .5s; }
-.bv-gli-city{ color:#F4EDDF; line-height:1.02; transition:font-size .6s cubic-bezier(.34,1.2,.4,1), color .5s, opacity .5s; }
+.bv-gli-city{ color:#F4EDDF; line-height:1.02; transition:font-size .6s cubic-bezier(.22,1,.36,1), color .5s, opacity .5s; }
 .bv-gli-detail{ overflow:hidden; transition:max-height .6s cubic-bezier(.4,0,.2,1), opacity .5s ease, margin .5s; }
 .bv-gli-sub{ font-size:15px; color:#C7B79A; }
 .bv-gli-note{ font-size:14px; color:#A8987B; font-style:italic; margin-top:12px; line-height:1.55; max-width:400px; }
@@ -1680,7 +1680,7 @@ html.acct-modal-open, body.acct-modal-open{ overflow:hidden; }
 
 /* ===== quote card v3 ===== */
 .q-flights{ margin:16px 0; display:flex; flex-direction:column; gap:10px; }
-.q-seg{ padding:15px 18px; background:linear-gradient(180deg, rgba(169,133,76,.07), rgba(169,133,76,.03)); border:1px solid rgba(169,133,76,.18); border-left:3px solid var(--gold); border-radius:12px; }
+.q-seg{ padding:15px 18px; background:linear-gradient(180deg, rgba(169,133,76,.09), rgba(169,133,76,.03)); border:1px solid rgba(169,133,76,.34); border-radius:12px; }
 .q-seg-head{ display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
 .q-seg-air{ font-weight:600; font-size:15px; color:var(--ink); letter-spacing:.01em; }
 .q-seg-route{ font-size:12px; letter-spacing:.14em; color:var(--gold-ink); white-space:nowrap; font-weight:500; }
@@ -1920,7 +1920,7 @@ html.acct-modal-open, body.acct-modal-open{ overflow:hidden; }
 .bv-checkin{ margin-left:auto; flex:none; display:inline-flex; align-items:center; padding:7px 14px; border:1px solid rgba(201,162,75,.5); border-radius:999px; font-size:12px; font-weight:600; letter-spacing:.04em; color:#E8CE8F; text-decoration:none; white-space:nowrap; }
 .bv-checkin:hover{ background:rgba(201,162,75,.16); border-color:#C9A24B; }
 @media (max-width: 640px){ .bv-checkin{ margin-left:0; margin-top:8px; } }
-.ld-party{ margin:-16px 0 26px; font-size:13.5px; font-style:italic; color:#5A5142; }
+.ld-party{ margin:10px 0 30px; font-size:13.5px; font-style:italic; color:#5A5142; }
 
 /* Release B: day-by-day notes, documents, cruise */
 .bv-day{ display:grid; grid-template-columns:150px 1fr; gap:20px; padding:20px 0; border-bottom:1px solid rgba(201,162,75,.16); }
@@ -1955,3 +1955,17 @@ html.acct-modal-open, body.acct-modal-open{ overflow:hidden; }
 /* destination banner inside quote/invoice paper docs */
 .ld-banner--doc .ld-banner-img{ min-height:200px; }
 .bv-checkin{ align-self:center; }
+
+
+/* PDF chapters: every city (and closing chapters) starts on its own page, with safe air
+   at the top of the new page so nothing prints against the trim edge */
+.ld-page{ page-break-before: always; break-before: page; border-top:30px solid #F4EDDF; }
+.ld-banner.ld-page{ margin-top:14px; }
+.ld-group-label.ld-page{ margin-top:0; }
+.ld-card, .ld-note, .ld-banner, .ld-day{ page-break-inside: avoid; }
+.ld-banner.ld-page .ld-banner-img, .ld-banner.ld-page::after{ border-radius:14px; }
+
+
+/* typographic wrapping: even heading lines, no orphaned last words in prose */
+h1, h2, h3, .ld-h1, .ld-title, .bv-item-title, .ld-banner-city{ text-wrap: balance; }
+p, .ld-prose, .bv-day-text, .quote-note{ text-wrap: pretty; }

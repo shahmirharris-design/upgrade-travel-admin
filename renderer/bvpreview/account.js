@@ -385,7 +385,7 @@
     var travelers = items.reduce(function (n, it) { return n + (it.passengers || travelerList(it.traveler_names).length || 1); }, 0);
     return h('div', { class: 'trip-group' }, [
       h('div', { class: 'trip-group-head' }, [
-        h('span', { class: 'trip-group-eyebrow', text: 'Travelling together' }),
+        h('span', { class: 'trip-group-eyebrow', text: 'Traveling together' }),
         h('h3', { class: 'trip-group-title', text: groupTitleFromItems(items) }),
         h('p', { class: 'trip-group-sub', text: items.length + ' itineraries  ·  ' + travelers + ' travelers' })
       ]),
@@ -708,7 +708,7 @@
     ]);
   }
   function ldBanner(city) {
-    return h('section', { class: 'ld-banner' }, [
+    return h('section', { class: 'ld-banner ld-page' }, [
       h('div', { class: 'ld-banner-img bv-ph', 'data-city': city.city || '' }),
       h('div', { class: 'ld-banner-cap' }, [h('div', { class: 'ld-banner-eyebrow', text: 'Arriving in' }), h('h2', { class: 'ld-banner-city', text: city.city || '' })])
     ]);
@@ -811,19 +811,19 @@
       ['Cabin', (it.segments && it.segments[0] && it.segments[0].cabin) || ''],
       ['Itinerary', it.itinerary_number ? 'No. ' + it.itinerary_number : '']
     ]));
-    if (it.traveler_names) doc.appendChild(h('p', { class: 'ld-party', text: 'Travelling party: ' + travelerList(it.traveler_names).join(', ') }));
+    if (it.traveler_names) doc.appendChild(h('p', { class: 'ld-party', text: 'Traveling party: ' + travelerList(it.traveler_names).join(', ') }));
     var no = 0;
     ldEvents(it).forEach(function (ev) {
       if (ev.type === 'banner') doc.appendChild(ldBanner(ev.city));
-      else if (ev.type === 'label') doc.appendChild(h('div', { class: 'ld-group-label', text: ev.text }));
+      else if (ev.type === 'label') doc.appendChild(h('div', { class: 'ld-group-label ld-page', text: ev.text }));
       else if (ev.type === 'flight') doc.appendChild(ldFlightCard(++no, ev.s, ev.prev));
       else if (ev.type === 'hotel') doc.appendChild(ldHotelCard(++no, ev.x));
       else if (ev.type === 'transport') doc.appendChild(ldTransportCard(++no, ev.x));
       else if (ev.type === 'ent') doc.appendChild(ldEntCard(++no, ev.x));
     });
-    if (it.cruises && it.cruises.length) { doc.appendChild(h('div', { class: 'ld-group-label', text: 'The Voyage' })); it.cruises.forEach(function (cx) { doc.appendChild(ldCruiseCard(++no, cx)); }); }
+    if (it.cruises && it.cruises.length) { doc.appendChild(h('div', { class: 'ld-group-label ld-page', text: 'The Voyage' })); it.cruises.forEach(function (cx) { doc.appendChild(ldCruiseCard(++no, cx)); }); }
     var ldDN = (it.day_notes || []).slice().sort(function (a, b) { return ('' + (a.date || '')).localeCompare('' + (b.date || '')); });
-    if (ldDN.length) { doc.appendChild(h('div', { class: 'ld-group-label', text: 'Day by Day' })); ldDN.forEach(function (dx) { doc.appendChild(ldDayCard(dx)); }); }
+    if (ldDN.length) { doc.appendChild(h('div', { class: 'ld-group-label ld-page', text: 'Day by Day' })); ldDN.forEach(function (dx) { doc.appendChild(ldDayCard(dx)); }); }
     if (it.notes) doc.appendChild(h('div', { class: 'ld-note' }, [h('div', { class: 'ld-sumlabel', text: 'From your specialist' }), h('p', { text: it.notes })]));
     if (it.documents && it.documents.length) doc.appendChild(h('div', { class: 'ld-note' }, [h('div', { class: 'ld-sumlabel', text: 'Travel documents' }), h('p', { class: 'ld-prose', text: it.documents.map(function (dz) { return dz.name; }).filter(Boolean).join('  ·  ') + '. Open them any time from your online itinerary.' })]));
     doc.appendChild(h('p', { class: 'ld-disclaimer', text: itinDisclaimer() }));
@@ -1084,7 +1084,7 @@
       economy: [['Reserved seating', 'Your seats secured together'], ['ice entertainment', 'Thousands of channels on demand'], ['Full meal service', 'With generous baggage']]
     },
     qatar: {
-      business: [['Qsuite', 'A private suite with a closing door and lie-flat bed'], ['Dine on demand', 'Restaurant-style à la carte, any time'], ['Al Mourjan Lounge in Doha', 'Plus premium lounge access worldwide'], ['Adjustable double & quad', 'Configured for travelling together']],
+      business: [['Qsuite', 'A private suite with a closing door and lie-flat bed'], ['Dine on demand', 'Restaurant-style à la carte, any time'], ['Al Mourjan Lounge in Doha', 'Plus premium lounge access worldwide'], ['Adjustable double & quad', 'Configured for traveling together']],
       first: [['Private first suite', 'On select A380 aircraft'], ['À la carte fine dining', 'Served on your schedule'], ['Al Safwa First Lounge', 'The flagship lounge in Doha'], ['Designer amenities & bedding', 'Turn-down on request']],
       economy: [['Reserved seating', 'Your seats secured together'], ['Oryx One entertainment', 'The latest films and shows'], ['Full meal service', 'With generous baggage']]
     },
@@ -1554,7 +1554,7 @@
     var lk = key.toLowerCase();
     for (var ok in _bvCityOverride) { if (ok.toLowerCase() === lk && _bvCityOverride[ok]) { cb(_bvCityOverride[ok]); return; } }
     bvWaterfall([
-      function (c) { pexelsImg(key + ' city travel', c); },
+      function (c) { pexelsImg(key + ' famous landmark daytime', c); },
       function (c) { c(CITY_IMAGES[lk] || ''); },
       function (c) { wikiSummaryImg(key, c); },
       function (c) { commonsSearchImg(key + ' skyline', c); },
@@ -1654,7 +1654,7 @@
     /* licensed Pexels shots lead the rail; accuracy-gated Commons results follow */
     var pexQ = slot.kind === 'hotel' ? ((name ? name + ' hotel ' : 'luxury hotel ') + city).trim()
       : slot.kind === 'venue' ? (((slot.cat || name || '') + ' ' + city).trim() || name)
-      : ((city || name) + ' city travel');
+      : ((city || name) + ' famous landmark daytime');
     pexelsList(pexQ, function (ph) {
       (ph || []).forEach(function (p2) { if (!seen[p2.url] && out.length < 6) { seen[p2.url] = 1; out.push({ url: p2.url, title: p2.alt || 'Pexels' }); } });
       commonsNext();
