@@ -316,7 +316,7 @@
   function sectionOverview() {
     var p = state.profile, bk = state.bookings || [], its = state.itineraries || [], qs = state.quotes || [], ivs = state.invoices || [];
     var wrap = h('div', { class: 'acct-section' });
-    wrap.appendChild(h('h2', { class: 'acct-h2', text: 'Welcome back, ' + (p.first_name || 'traveller') + '.' }));
+    wrap.appendChild(h('h2', { class: 'acct-h2', text: 'Welcome back, ' + (p.first_name || 'traveler') + '.' }));
     /* things that need the customer's attention come first */
     var waiting = qs.filter(function (q) { return (q.status || 'sent') === 'sent'; });
     if (waiting.length) {
@@ -382,12 +382,12 @@
     var others = items.filter(function (it) { return !itinIsOwn(it); });
     var allOwn = others.length === 0; /* one shared login → don't single anyone out */
     var ordered = allOwn ? items : items.filter(itinIsOwn).concat(others);
-    var travellers = items.reduce(function (n, it) { return n + (it.passengers || travelerList(it.traveler_names).length || 1); }, 0);
+    var travelers = items.reduce(function (n, it) { return n + (it.passengers || travelerList(it.traveler_names).length || 1); }, 0);
     return h('div', { class: 'trip-group' }, [
       h('div', { class: 'trip-group-head' }, [
         h('span', { class: 'trip-group-eyebrow', text: 'Travelling together' }),
         h('h3', { class: 'trip-group-title', text: groupTitleFromItems(items) }),
-        h('p', { class: 'trip-group-sub', text: items.length + ' itineraries  ·  ' + travellers + ' travellers' })
+        h('p', { class: 'trip-group-sub', text: items.length + ' itineraries  ·  ' + travelers + ' travelers' })
       ]),
       h('div', { class: 'trip-list' }, ordered.map(function (it) { return itinTripCard(it, coveredFor(it), { group: true, own: !allOwn && itinIsOwn(it) }); }))
     ]);
@@ -807,7 +807,7 @@
     doc.appendChild(ldMast('Private Itinerary'));
     doc.appendChild(ldCover('Bespoke Journey', it.title || it.destination || 'Your journey', [
       ['Dates', itinDateRange(it)],
-      ['Travellers', paxText(it)],
+      ['Travelers', paxText(it)],
       ['Cabin', (it.segments && it.segments[0] && it.segments[0].cabin) || ''],
       ['Itinerary', it.itinerary_number ? 'No. ' + it.itinerary_number : '']
     ]));
@@ -932,7 +932,7 @@
     chips.push(h('span', { class: 'trip-chip', text: paxText(it) }));
     var sv = itinSavings(it); if (sv > 0) chips.push(h('span', { class: 'trip-chip trip-chip--save', text: 'You save ' + money(sv, it.currency) }));
     card.appendChild(h('div', { class: 'trip-meta' }, chips));
-    if (it.traveler_names) { var tl = travelerList(it.traveler_names); if (tl.length) card.appendChild(h('p', { class: 'itin-travelers' }, [h('span', { class: 'itin-travelers-k', text: 'Travellers' }), h('span', { text: tl.join(', ') })])); }
+    if (it.traveler_names) { var tl = travelerList(it.traveler_names); if (tl.length) card.appendChild(h('p', { class: 'itin-travelers' }, [h('span', { class: 'itin-travelers-k', text: 'Travelers' }), h('span', { text: tl.join(', ') })])); }
     var sum = [], nf = (it.segments || []).length, nh = (it.hotels || []).length, nt = (it.transport || []).length, ne = (it.entertainment || []).length;
     if (nf) sum.push(nf + (nf > 1 ? ' flights' : ' flight'));
     if (nh) sum.push(nh + (nh > 1 ? ' hotels' : ' hotel'));
@@ -964,7 +964,7 @@
       ['Invoice', inv.invoice_number ? 'No. ' + inv.invoice_number : ''],
       ['Issued', fmtDate(inv.created_at || new Date().toISOString())],
       ['Balance due', (inv.due_date && bal > 0.001) ? fmtDate(inv.due_date) : ''],
-      ['Travellers', paxText(inv)],
+      ['Travelers', paxText(inv)],
       ['Ref', inv.booking_reference || '']
     ]));
     if (inv.segments && inv.segments.length) { doc.appendChild(h('div', { class: 'ld-group-label', text: 'The Routing' })); doc.appendChild(ldRouting(inv)); }
@@ -990,7 +990,7 @@
       ['Quote', q.quote_number ? 'No. ' + q.quote_number : ''],
       ['Issued', fmtDate(q.created_at || new Date().toISOString())],
       ['Valid until', q.valid_until ? fmtDate(q.valid_until) : ''],
-      ['Travellers', paxText(q)]
+      ['Travelers', paxText(q)]
     ]));
     if (q.segments && q.segments.length) { doc.appendChild(h('div', { class: 'ld-group-label', text: 'The Routing' })); doc.appendChild(ldRouting(q)); }
     doc.appendChild(h('div', { class: 'ld-group-label', text: 'The Pricing' }));
@@ -1093,7 +1093,7 @@
   function bvCabinKey(cabin) { var c = (cabin || '').toLowerCase(); if (c.indexOf('first') > -1) return 'first'; if (c.indexOf('business') > -1) return 'business'; if (c.indexOf('premium') > -1) return 'premium'; return 'economy'; }
   function cabinPerks(cabin, airline) { var ck = bvCabinKey(cabin), prod = CABIN_PRODUCTS[bvAirlineKey(airline)]; if (prod && prod[ck]) return prod[ck]; return CABIN_PERKS[ck] || CABIN_PERKS.economy; }
   /* via-cities that are just connections/layovers, not destinations: the leg is flagged as a
-     connection, OR the traveller flies onward the same day they arrive (no overnight = no stay) */
+     connection, OR the traveler flies onward the same day they arrive (no overnight = no stay) */
   function bvPassthroughCodes(segs) {
     var pass = {};
     (segs || []).forEach(function (s, i) {
@@ -1798,7 +1798,7 @@
       ])
     ]);
   }
-  /* booking confirmation (QR / barcode / email image) the traveller shows at the venue */
+  /* booking confirmation (QR / barcode / email image) the traveler shows at the venue */
   function bvConf(x) {
     if (!x || !x.confirmation_image) return null;
     var img = h('img', { class: 'bv-conf-img', src: x.confirmation_image, alt: 'Booking confirmation', loading: 'lazy' });
@@ -1832,7 +1832,7 @@
     /* hero */
     var totalPax = (it.pax_adults || 0) + (it.pax_children || 0) + (it.pax_infants || 0) || (it.passengers || 1);
     var heroOrigin = seq[0] || (segs[0] && segs[0].from) || {};
-    var heroStats = [['Departure', it.start_date ? fmtDate(it.start_date) : (segs[0] && segs[0].depart_date ? fmtDate(segs[0].depart_date) : '—')], ['Return', it.end_date ? fmtDate(it.end_date) : '—'], ['Travellers', paxWordCap(totalPax)], ['Cabin', (segs[0] && segs[0].cabin) || '—'], ['Departing from', heroOrigin.city ? (heroOrigin.city + (heroOrigin.code ? '  ·  ' + heroOrigin.code : '')) : '—']];
+    var heroStats = [['Departure', it.start_date ? fmtDate(it.start_date) : (segs[0] && segs[0].depart_date ? fmtDate(segs[0].depart_date) : '—')], ['Return', it.end_date ? fmtDate(it.end_date) : '—'], ['Travelers', paxWordCap(totalPax)], ['Cabin', (segs[0] && segs[0].cabin) || '—'], ['Departing from', heroOrigin.city ? (heroOrigin.city + (heroOrigin.code ? '  ·  ' + heroOrigin.code : '')) : '—']];
     var p = state.profile || {};
     var dests = seq.slice(1).map(function (c) { return c.city; }), uniqD = [];
     dests.forEach(function (c) { if (c && uniqD.indexOf(c) < 0) uniqD.push(c); });

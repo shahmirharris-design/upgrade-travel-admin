@@ -1085,6 +1085,67 @@
   }
   function layoverWord(s) { return s && s.layover_kind === 'connection' ? 'Quick connection' : 'Layover'; }
   function layoverLabel(s) { return [layoverWord(s), s && s.layover_duration].filter(Boolean).join('  ·  '); }
+  /* structured traveler entry: Title + First + Last + Type rows. A hidden field keeps the
+     joined "Mr Ahmed Loya" lines (so everything downstream keeps working) and the counts
+     auto-fill the adults/children/infants numbers. */
+  var NAME_TITLES = ['Mr', 'Mrs', 'Ms', 'Miss', 'Master', 'Dr'];
+  var PAX_TYPES = ['Adult', 'Child', 'Infant'];
+  function parseTravelerLine(line) {
+    line = (line || '').trim(); if (!line) return null;
+    var t = { title: 'Mr', first: '', last: '', type: 'Adult' };
+    var parts = line.split(/\s+/);
+    var first = (parts[0] || '').replace(/\.$/, ''), match = null;
+    NAME_TITLES.forEach(function (x) { if (x.toLowerCase() === first.toLowerCase()) match = x; });
+    if (match) { t.title = match; parts.shift(); if (match === 'Master') t.type = 'Child'; }
+    t.first = parts.shift() || '';
+    t.last = parts.join(' ');
+    return (t.first || t.last) ? t : null;
+  }
+  function travelerRows(opts) {
+    opts = opts || {};
+    var hiddenAttrs = { type: 'hidden', value: opts.value || '' };
+    if (opts.id) hiddenAttrs.id = opts.id;
+    if (opts.cls) hiddenAttrs.class = opts.cls;
+    var hidden = h('input', hiddenAttrs);
+    var rows = h('div', { class: 'trav-rows' });
+    var wrap;
+    function sync() {
+      var names = [], counts = { Adult: 0, Child: 0, Infant: 0 };
+      Array.prototype.forEach.call(rows.querySelectorAll('.trav-row'), function (r) {
+        var title = (r.querySelector('.trav-title .ss input[type=hidden]') || {}).value || '';
+        var fn = ((r.querySelector('.trav-first') || {}).value || '').trim();
+        var ln = ((r.querySelector('.trav-last') || {}).value || '').trim();
+        var type = (r.querySelector('.trav-type .ss input[type=hidden]') || {}).value || 'Adult';
+        if (!fn && !ln) return;
+        names.push([title, fn, ln].filter(Boolean).join(' '));
+        counts[type] = (counts[type] || 0) + 1;
+      });
+      hidden.value = names.join('\n');
+      if (opts.onChange) opts.onChange(counts, names.length, wrap);
+    }
+    function addRow(t) {
+      t = t || { title: 'Mr', first: '', last: '', type: 'Adult' };
+      var rm = h('button', { type: 'button', class: 'bag-rm', title: 'Remove traveler', text: '\u00d7' });
+      var row = h('div', { class: 'trav-row' }, [
+        h('div', { class: 'trav-title' }, [styledSelect(null, t.title, NAME_TITLES, sync)]),
+        h('input', { class: 'inv-input trav-first', type: 'text', placeholder: 'First name', autocomplete: 'off', value: t.first || '' }),
+        h('input', { class: 'inv-input trav-last', type: 'text', placeholder: 'Last name', autocomplete: 'off', value: t.last || '' }),
+        h('div', { class: 'trav-type' }, [styledSelect(null, t.type, PAX_TYPES, sync)]),
+        rm
+      ]);
+      row.addEventListener('input', sync);
+      rm.addEventListener('click', function () { row.remove(); sync(); });
+      rows.appendChild(row);
+    }
+    ('' + (opts.value || '')).split(/\n|,/).map(parseTravelerLine).filter(Boolean).forEach(addRow);
+    wrap = h('div', { class: 'trav-wrap' }, [
+      hidden,
+      h('div', { class: 'trav-head' }, [h('span', { text: 'Title' }), h('span', { text: 'First name' }), h('span', { text: 'Last name' }), h('span', { text: 'Type' }), h('span')]),
+      rows,
+      h('button', { type: 'button', class: 'inv-addline', onclick: function () { addRow(); }, text: '+ Add traveler' })
+    ]);
+    return wrap;
+  }
   /* seats as separable chips: type a seat (e.g. 2A), press Enter -> its own tag. Stores an array. */
   function seatList(v) { if (Array.isArray(v)) return v.filter(Boolean); return (v || '').split(/[\s,·\/]+/).map(function (s) { return s.trim(); }).filter(Boolean); }
   function seatChips(value) {
@@ -1375,7 +1436,7 @@
     var route = s.from.city + ' (' + s.from.code + ') to ' + s.to.city + ' (' + s.to.code + ')';
     return (head ? head + ' — ' : 'Flight — ') + route;
   }
-  function flightDetail(s, pax) { var d = []; if (s.depart_date) d.push(fmtDate(s.depart_date)); if (pax) d.push(pax + ' traveller' + (pax > 1 ? 's' : '')); return d.join(' · ') || null; }
+  function flightDetail(s, pax) { var d = []; if (s.depart_date) d.push(fmtDate(s.depart_date)); if (pax) d.push(pax + ' traveler' + (pax > 1 ? 's' : '')); return d.join(' · ') || null; }
   function fillFromFlights() {
     var note = document.getElementById('inv-gen-note'), segs = readSegments(), lines = document.getElementById('inv-lines');
     if (!segs.length) { if (note) { note.textContent = 'Add a flight with a From and To first.'; note.style.display = 'block'; } return; }
@@ -1780,7 +1841,7 @@
   function quoteStartBar(target) {
     var section = h('div', { class: 'inv-section qstart' });
     section.appendChild(h('h3', { class: 'inv-h3', text: 'Start from a quote' }));
-    section.appendChild(h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 12px', text: 'Already quoted this customer? Search a quote to pull its flights, travellers and pricing straight in.' }));
+    section.appendChild(h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 12px', text: 'Already quoted this customer? Search a quote to pull its flights, travelers and pricing straight in.' }));
     var wrap = h('div', { class: 'ac-wrap' });
     var input = h('input', { class: 'inv-input', type: 'text', placeholder: 'Search by customer, quote no. or route…', autocomplete: 'off' });
     var menu = h('div', { class: 'ac-menu', hidden: true });
@@ -1823,7 +1884,7 @@
     var pax = (req.adults || 0) + (req.children || 0) + (req.infants || 0), bits = [];
     if (req.trip) bits.push(req.trip);
     if (req.cabin) bits.push(req.cabin);
-    if (pax) bits.push(pax + ' traveller' + (pax > 1 ? 's' : ''));
+    if (pax) bits.push(pax + ' traveler' + (pax > 1 ? 's' : ''));
     if (req.depart) bits.push(req.depart + (req.return_date ? ' – ' + req.return_date : ''));
     return h('div', { class: 'qreq-card' }, [
       h('div', { class: 'qreq-top' }, [
@@ -1985,7 +2046,7 @@
         h('h3', { class: 'inv-h3', text: 'Package' }),
         h('div', { class: 'inv-row2' }, [invField('Package name', 'pkg-name', 'text', 'e.g. Dubai First Class · 5 nights', d.name), cityField('Destination', '', d.destination, 'Start typing a city…', 'pkg-dest')]),
         invField('Display title (optional)', 'pkg-title', 'text', 'Shown on the trip, e.g. Dubai First Class Getaway', d.title),
-        h('p', { class: 'inv-sublabel', style: 'margin-top:16px', text: 'Default travellers' }),
+        h('p', { class: 'inv-sublabel', style: 'margin-top:16px', text: 'Default travelers' }),
         h('div', { class: 'inv-row3' }, [paxField('Adults (12+)', 'pkg-adults', d.pax_adults != null ? d.pax_adults : 2), paxField('Children (2–11)', 'pkg-children', d.pax_children != null ? d.pax_children : 0), paxField('Infants (under 2)', 'pkg-infants', d.pax_infants != null ? d.pax_infants : 0)])
       ]),
       h('div', { class: 'inv-section' }, [h('h3', { class: 'inv-h3', text: 'Flights' }), flightsSection(segs, detectTripType(d))]),
@@ -2156,7 +2217,7 @@
         invField('Trip title', 'inv-title', 'text', 'e.g. Dubai First Class Getaway', d.title),
         h('p', { class: 'inv-sublabel', text: 'Flights' }),
         flightsSection(segs, detectTripType(d)),
-        h('p', { class: 'inv-sublabel', style: 'margin-top:18px', text: 'Travellers' }),
+        h('p', { class: 'inv-sublabel', style: 'margin-top:18px', text: 'Travelers' }),
         h('div', { class: 'inv-row3' }, [paxField('Adults (12+)', 'inv-adults', d.pax_adults != null ? d.pax_adults : 1), paxField('Children (2–11)', 'inv-children', d.pax_children != null ? d.pax_children : 0), paxField('Infants (under 2)', 'inv-infants', d.pax_infants != null ? d.pax_infants : 0)]),
         h('div', { style: 'margin-top:14px' }, [invField('Booking reference (optional)', 'inv-ref', 'text', 'PNR / confirmation', d.booking_reference)])
       ]),
@@ -2794,9 +2855,9 @@
         h('h3', { class: 'inv-h3', text: 'Trip' }),
         h('div', { class: 'inv-row2' }, [invField('Trip title', 'itin-title', 'text', 'e.g. Dubai First Class Getaway', d.title), cityField('Destination', '', d.destination, 'Start typing a city…', 'itin-dest')]),
         h('div', { class: 'inv-row2' }, [invField('Trip starts', 'itin-start', 'date', '', d.start_date), invField('Trip ends', 'itin-end', 'date', '', d.end_date)]),
-        h('p', { class: 'inv-sublabel', style: 'margin-top:16px', text: 'Travellers' }),
+        h('p', { class: 'inv-sublabel', style: 'margin-top:16px', text: 'Travelers' }),
         h('div', { class: 'inv-row3' }, [paxField('Adults (12+)', 'itin-adults', d.pax_adults != null ? d.pax_adults : 1), paxField('Children (2–11)', 'itin-children', d.pax_children != null ? d.pax_children : 0), paxField('Infants (under 2)', 'itin-infants', d.pax_infants != null ? d.pax_infants : 0)]),
-        h('label', { class: 'inv-field', style: 'margin-top:14px' }, [h('span', { text: 'Traveller names (optional — shown on the itinerary)' }), h('textarea', { id: 'itin-names', class: 'inv-input inv-textarea', rows: '2', placeholder: 'e.g.\nMr Ahmed Loya\nMrs Loya', value: d.traveler_names || '' })])
+        h('div', { class: 'inv-field', style: 'margin-top:14px' }, [h('span', { text: 'Traveler names (optional). Shown on the itinerary; the counts above fill in automatically.' }), travelerRows({ id: 'itin-names', value: d.traveler_names || '', onChange: function (c, total) { if (!total) return; var a = document.getElementById('itin-adults'), ch = document.getElementById('itin-children'), inf = document.getElementById('itin-infants'); if (a) a.value = c.Adult || 0; if (ch) ch.value = c.Child || 0; if (inf) inf.value = c.Infant || 0; } })])
       ]),
       h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'Flights' }),
@@ -2848,7 +2909,7 @@
     var msg = document.getElementById('inv-msg');
     if (!state.docCustomer) { showInvMsg(msg, 'Find and confirm a customer first.', 'err'); return; }
     var d = collectItin();
-    if (!d.segments.length && !d.hotels.length && !d.transport.length && !d.entertainment.length) { showInvMsg(msg, 'Add at least one flight, hotel, transfer or experience.', 'err'); return; }
+    if (!d.segments.length && !d.hotels.length && !d.transport.length && !d.entertainment.length && !(d.cruises && d.cruises.length) && !(d.day_notes && d.day_notes.length)) { showInvMsg(msg, 'Add at least one thing to the trip: a flight, hotel, transfer, dining, experience or cruise.', 'err'); return; }
     if (roundTripGap(d)) { showInvMsg(msg, RT_GAP_MSG, 'err'); return; }
     /* photo picks + edit-in-place identity survive re-collection */
     d.city_images = (state.itinDraft && state.itinDraft.city_images) || null;
@@ -3145,7 +3206,7 @@
       /* firstCanConnect: the first shared flight (e.g. Istanbul -> Destination 1) may be marked a
          connection, because after generation it follows each group's arrival into the meeting city */
       g.shared = { segments: readLegsFrom(document.getElementById('inv-segs'), true), trip_type: readTripType(), hotels: readCards('itin-hotels', 'hotel'), transport: readCards('itin-transport', 'transport'), entertainment: readCards('itin-dining', 'dining').concat(readCards('itin-ent', 'ent')), cruises: readCards('itin-cruises', 'cruise'), day_notes: readCards('itin-days', 'day'), documents: readCards('itin-docs', 'doc') };
-      g.destination = gtDeriveDest(g.shared.segments); /* auto from the shared flights, no field to fill */
+      g.destination = gtDeriveDest(g.shared); /* auto from the shared flights (or hotels), no field to fill */
     }
     var itinEls = document.querySelectorAll('.gt-itin');
     if (itinEls.length) {
@@ -3167,17 +3228,19 @@
       g.pods = pods;
     }
   }
-  /* the trip's destinations = the shared journey's stop cities, excluding the meeting/hub city */
-  function gtDeriveDest(segs) {
-    segs = segs || []; var hub = segs[0] && segs[0].from && segs[0].from.code, seen = {}, cities = [];
-    segs.forEach(function (s) { var t = s && s.to; if (t && t.code && t.code !== hub && t.city && !seen[t.code]) { seen[t.code] = 1; cities.push(t.city); } });
+  /* the trip's destinations = the shared journey's stop cities (or, with no flights, the hotel cities) */
+  function gtDeriveDest(shared) {
+    shared = shared || {};
+    var segs = shared.segments || []; var hub = segs[0] && segs[0].from && segs[0].from.code, seen = {}, cities = [];
+    segs.forEach(function (sg) { var t = sg && sg.to; if (t && t.code && t.code !== hub && t.city && !seen[t.code]) { seen[t.code] = 1; cities.push(t.city); } });
+    if (!cities.length) (shared.hotels || []).forEach(function (hx) { var c = ((hx.location || '').split(',')[0] || '').trim(); if (c && cities.indexOf(c) < 0) cities.push(c); });
     return cities.slice(0, 3).join(' & ') || null;
   }
   function gtBuildView() {
     state.gtBuilding = true;
     var g = state.gt, wrap = h('div');
     if (!g.pods.length) g.pods = [{ label: '', title: null, pax: null, travelers: '', total: null, comp: null, out_segments: [], ret_segments: [] }];
-    wrap.appendChild(mainHead(g.editing_id ? 'Edit group trip' : 'New group trip', 'One trip, several itineraries. Build the shared part once, then fill in each itinerary’s own start, travellers and flights.'));
+    wrap.appendChild(mainHead(g.editing_id ? 'Edit group trip' : 'New group trip', 'One trip, several itineraries. Build the shared part once, then fill in each itinerary’s own start, travelers and flights.'));
     var body = h('div', { class: 'main-body' });
     if (state.gtFlash) { body.appendChild(flashEl(state.gtFlash, false)); state.gtFlash = null; }
     body.appendChild(gtItinBanner());
@@ -3192,7 +3255,7 @@
         gtSeg(g.target_kind, [['account', 'One shared login'], ['group', 'Linked group (separate logins)']], function (k) { gtCollectAll(); g.target_kind = k; renderTab(); }),
         g.target_kind === 'account'
           ? h('div', { style: 'margin-top:12px' }, [h('div', { id: 'gt-cust-box' }, g.customer ? [gtCustChip(g.customer)] : [miniCustomerSearch('Search the family account…', function (c) { g.customer = c; var b = document.getElementById('gt-cust-box'); if (b) { b.textContent = ''; b.appendChild(gtCustChip(c)); } })])])
-          : h('div', { style: 'margin-top:12px' }, [h('p', { class: 'inv-sublabel', style: 'margin-bottom:8px', text: 'Each traveller keeps their own login; the group links them so everyone sees every itinerary.' }), gtGroupControl()])
+          : h('div', { style: 'margin-top:12px' }, [h('p', { class: 'inv-sublabel', style: 'margin-bottom:8px', text: 'Each traveler keeps their own login; the group links them so everyone sees every itinerary.' }), gtGroupControl()])
       ]),
       h('div', { class: 'inv-section' }, [
         h('div', { class: 'gt-count-head' }, [
@@ -3215,7 +3278,7 @@
       ]),
       h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'Fill in each itinerary' }),
-        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Each starting point’s travellers, title and its own flights to and from home. The shared trip above is added to every one.' }),
+        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Each starting point’s travelers, title and its own flights to and from home. The shared trip above is added to every one.' }),
         h('div', { class: 'gt-itins' }, g.pods.map(gtItinCard))
       ]),
       h('div', { class: 'inv-section' }, [
@@ -3227,7 +3290,7 @@
         ]),
         h('div', { class: 'inv-row2' }, [invField('Your price (total, per itinerary)', 'itin-total', 'number', '0.00', g.total_charged), invField('Comparable / retail price', 'itin-comp', 'number', '0.00', g.comparable_total)]),
         h('input', { type: 'hidden', id: 'itin-cur', value: g.currency || 'USD' }),
-        h('label', { class: 'inv-field', style: 'margin-top:16px' }, [h('span', { text: 'Notes (shown on every itinerary)' }), h('textarea', { id: 'gt-notes', class: 'inv-input inv-textarea', rows: '2', placeholder: 'Anything the travellers should know.', value: g.notes || '' })])
+        h('label', { class: 'inv-field', style: 'margin-top:16px' }, [h('span', { text: 'Notes (shown on every itinerary)' }), h('textarea', { id: 'gt-notes', class: 'inv-input inv-textarea', rows: '2', placeholder: 'Anything the travelers should know.', value: g.notes || '' })])
       ]),
       h('div', { class: 'inv-submit' }, [
         h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:13px 24px', onclick: function () { state.gt = gtBlank(); renderTab(); }, text: 'Cancel' }),
@@ -3257,18 +3320,18 @@
   function gtItinCard(pod, i) {
     var sharedR = gtSharedRoute(state.gt.shared.segments), meet = sharedR ? sharedR.split(' → ')[0] : 'the meeting point';
     var pax = gtPodPax(pod);
-    var summ = [pod.title, pax + ' traveller' + (pax > 1 ? 's' : '')].filter(Boolean).join('   ·   ');
+    var summ = [pod.title, pax + ' traveler' + (pax > 1 ? 's' : '')].filter(Boolean).join('   ·   ');
     var body = h('div', { class: 'gt-itin-body' }, [
       h('div', { class: 'inv-row2', style: 'margin-bottom:16px' }, [
         h('label', { class: 'inv-field' }, [h('span', { text: 'Starting point' }), h('input', { class: 'inv-input gt-i-label', type: 'text', placeholder: 'e.g. Detroit', autocomplete: 'off', value: pod.label || '' })]),
         h('label', { class: 'inv-field' }, [h('span', { text: 'Display title (shown to the customer)' }), h('input', { class: 'inv-input gt-i-title', type: 'text', placeholder: 'Defaults to the trip name', autocomplete: 'off', value: pod.title || '' })])
       ]),
       h('div', { class: 'inv-row3', style: 'margin-bottom:16px' }, [
-        h('label', { class: 'inv-field' }, [h('span', { text: 'Number of travellers' }), h('input', { class: 'inv-input gt-i-pax', type: 'number', min: '1', step: '1', value: pod.pax != null ? pod.pax : '' })]),
+        h('label', { class: 'inv-field' }, [h('span', { text: 'Number of travelers' }), h('input', { class: 'inv-input gt-i-pax', type: 'number', min: '1', step: '1', value: pod.pax != null ? pod.pax : '' })]),
         h('label', { class: 'inv-field' }, [h('span', { text: 'This group\u2019s price (optional)' }), h('input', { class: 'inv-input gt-i-total', type: 'number', min: '0', step: '0.01', placeholder: 'Uses trip pricing if blank', value: pod.total != null ? pod.total : '' })]),
         h('label', { class: 'inv-field' }, [h('span', { text: 'Comparable price (optional)' }), h('input', { class: 'inv-input gt-i-comp', type: 'number', min: '0', step: '0.01', placeholder: 'Retail they would pay', value: pod.comp != null ? pod.comp : '' })])
       ]),
-      h('label', { class: 'inv-field' }, [h('span', { text: 'Traveller names (optional)' }), h('textarea', { class: 'inv-input inv-textarea gt-i-travelers', rows: '2', placeholder: 'e.g.\nMr Ahmed Loya\nMrs Loya', value: pod.travelers || '' })]),
+      h('div', { class: 'inv-field' }, [h('span', { text: 'Traveler names (optional). The count above fills in automatically.' }), travelerRows({ cls: 'gt-i-travelers', value: pod.travelers || '', onChange: function (c, total, wrapEl) { if (!total || !wrapEl) return; var host = wrapEl.closest('.gt-itin'); var paxEl = host && host.querySelector('.gt-i-pax'); if (paxEl) paxEl.value = total; } })]),
       h('p', { class: 'gt-sub-label', style: 'margin-top:14px', text: 'Their flight(s) to ' + meet + ' — departure' }),
       podLegs('out', podOut(pod)),
       h('div', { class: 'gt-mid-note' }, [h('span', { class: 'gt-mid-line' }), h('span', { class: 'gt-mid-text', text: sharedR ? 'Shared trip  ·  ' + sharedR : 'The shared trip goes here' }), h('span', { class: 'gt-mid-line' })]),
@@ -3362,7 +3425,7 @@
     if (!owner) { err(g.target_kind === 'account' ? 'Pick the shared account first.' : 'Pick or create a linked group first.'); return; }
     if (g.target_kind === 'group' && !((g.group.travel_group_members || []).length)) { err('Add at least one member to the linked group.'); return; }
     var s = g.shared;
-    if (!(s.segments && s.segments.length) && !(s.hotels && s.hotels.length) && !(s.transport && s.transport.length) && !(s.entertainment && s.entertainment.length)) { err('Build the shared trip first — add at least one shared flight, hotel, transfer or experience.'); return; }
+    if (!(s.segments && s.segments.length) && !(s.hotels && s.hotels.length) && !(s.transport && s.transport.length) && !(s.entertainment && s.entertainment.length) && !(s.cruises && s.cruises.length) && !(s.day_notes && s.day_notes.length)) { err('Build the shared trip first. Add at least one shared flight, hotel, transfer, dining, experience or cruise.'); return; }
     var filled = g.pods.filter(function (p) { return (p.label || '').trim() || podOut(p).length || podRet(p).length; });
     if (!filled.length) { err('Fill in at least one itinerary (a starting point and its flights).'); return; }
     var btn = document.getElementById('gt-generate-btn'); if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
