@@ -808,7 +808,7 @@ input{ font-family:inherit; }
 .qreq-brief-pill b{ color:#7A5E29; font-weight:600; }
 
 /* global search */
-.side-search{ display:flex; align-items:center; gap:10px; margin:4px 18px 10px; padding:9px 12px; border:1px solid rgba(255,255,255,.14); border-radius:10px; background:rgba(255,255,255,.05); color:rgba(244,237,223,.72); font-size:12.5px; cursor:pointer; text-align:left; }
+.side-search{ -webkit-app-region:no-drag; display:flex; align-items:center; gap:10px; margin:4px 18px 10px; padding:9px 12px; border:1px solid rgba(255,255,255,.14); border-radius:10px; background:rgba(255,255,255,.05); color:rgba(244,237,223,.72); font-size:12.5px; cursor:pointer; text-align:left; }
 .side-search:hover{ background:rgba(255,255,255,.09); color:#F4EDDF; }
 .side-search svg{ flex:none; opacity:.8; }
 .gs-overlay{ position:fixed; inset:0; background:rgba(20,15,9,.55); z-index:120; display:flex; align-items:flex-start; justify-content:center; padding:12vh 20px 20px; }
