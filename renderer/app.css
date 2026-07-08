@@ -711,3 +711,11 @@ input{ font-family:inherit; }
 .upd-progress.is-indeterminate{ position:relative; }
 .upd-progress.is-indeterminate .upd-progress-fill{ width:38%; animation:updslide 1.1s ease-in-out infinite; }
 @keyframes updslide{ 0%{ margin-left:-40%; } 100%{ margin-left:100%; } }
+
+/* seat chips (type + Enter) */
+.seat-box{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; min-height:46px; padding:7px 10px; border:1px solid rgba(169,133,76,.45); border-radius:9px; background:#fff; cursor:text; }
+.seat-box:focus-within{ border-color:var(--gold); box-shadow:0 0 0 3px rgba(169,133,76,.16); }
+.seat-chip{ display:inline-flex; align-items:center; gap:6px; background:rgba(169,133,76,.15); border:1px solid var(--line); border-radius:6px; padding:3px 8px; font-size:13px; font-weight:500; color:var(--ink); }
+.seat-chip-x{ cursor:pointer; border:0; background:none; color:var(--stone); font-size:14px; line-height:1; padding:0; }
+.seat-chip-x:hover{ color:#a3402f; }
+.seat-input{ flex:1; min-width:100px; border:0; outline:0; background:none; font-size:14px; color:var(--ink); padding:4px 2px; }

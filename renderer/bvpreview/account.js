@@ -510,6 +510,8 @@
   /* ---------- itineraries + invoices (customer-facing docs) ---------- */
   function agencyName() { return (state.settings && state.settings.agency_name) || 'Upgrade Travel'; }
   function fmtTime(t) { if (!t) return ''; var s = '' + t, m = s.indexOf('T') > -1 ? s.split('T')[1] : s; var x = m.match(/(\d{1,2}):(\d{2})/); if (!x) return ''; var hh = +x[1], ap = hh >= 12 ? 'pm' : 'am', h12 = hh % 12 || 12; return h12 + ':' + x[2] + ' ' + ap; }
+  /* seats may be an array of chips (['2A','2K']) or a legacy string; render either */
+  function seatStr(s) { return Array.isArray(s) ? s.filter(Boolean).join(' · ') : (s || ''); }
   function itinDateRange(it) { return [it.start_date ? fmtDate(it.start_date) : '', it.end_date ? fmtDate(it.end_date) : ''].filter(Boolean).join(' – '); }
   var _pdfLoading = null;
   function ensureHtml2pdf(cb) {
@@ -602,7 +604,7 @@
       ['Duration', s.duration || ''],
       ['Aircraft', s.aircraft || ''],
       ['Terminal', [s.dep_terminal, s.arr_terminal].filter(Boolean).join(' → ')],
-      ['Seats', s.seats || ''],
+      ['Seats', seatStr(s.seats)],
       ['Baggage', s.baggage || ''],
       ['Confirmation', s.confirmation || '']
     ]));
@@ -1525,7 +1527,7 @@
       ['Flight', s.flight_number || '—'],
       ['Aircraft', s.aircraft || '—'],
       ['Terminal', [s.dep_terminal, s.arr_terminal].filter(Boolean).join(' → ') || '—'],
-      ['Your seats', s.seats || '—'],
+      ['Your seats', seatStr(s.seats) || '—'],
       ['Baggage', s.baggage || '—'],
       ['Confirmation', s.confirmation || '—']
     ];

@@ -1074,6 +1074,26 @@
   }
   function layoverWord(s) { return s && s.layover_kind === 'connection' ? 'Quick connection' : 'Layover'; }
   function layoverLabel(s) { return [layoverWord(s), s && s.layover_duration].filter(Boolean).join('  ·  '); }
+  /* seats as separable chips: type a seat (e.g. 2A), press Enter -> its own tag. Stores an array. */
+  function seatList(v) { if (Array.isArray(v)) return v.filter(Boolean); return (v || '').split(/[\s,·\/]+/).map(function (s) { return s.trim(); }).filter(Boolean); }
+  function seatChips(value) {
+    var box = h('div', { class: 'seat-box' });
+    var input = h('input', { class: 'seat-input', type: 'text', placeholder: 'type a seat, press Enter', autocomplete: 'off' });
+    function addChip(v) {
+      v = (v || '').trim().toUpperCase(); if (!v) return;
+      var chip = h('span', { class: 'seat-chip', 'data-seat': v }, [h('span', { text: v }), h('button', { type: 'button', class: 'seat-chip-x', title: 'Remove', onclick: function () { chip.remove(); }, text: '×' })]);
+      box.insertBefore(chip, input);
+    }
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addChip(input.value); input.value = ''; }
+      else if (e.key === 'Backspace' && !input.value) { var last = box.querySelector('.seat-chip:last-of-type'); if (last) last.remove(); }
+    });
+    input.addEventListener('blur', function () { if (input.value.trim()) { addChip(input.value); input.value = ''; } });
+    seatList(value).forEach(addChip);
+    box.appendChild(input);
+    box.addEventListener('click', function () { input.focus(); });
+    return h('label', { class: 'inv-field seg-seats-wrap' }, [h('span', { text: 'Seats' }), box]);
+  }
   function segRow(seg) {
     var cabinVal = (seg && seg.cabin) || (state.settings && state.settings.default_cabin) || 'Business Class';
     var rich = state.builderTab === 'itinerary' || state.pkgBuilding || state.gtBuilding;
@@ -1124,7 +1144,7 @@
         h('div', { class: 'inv-row3', style: 'margin-top:12px' }, [
           richField('Dep. terminal', 'seg-depterm', seg && seg.dep_terminal, 'e.g. 3'),
           richField('Arr. terminal', 'seg-arrterm', seg && seg.arr_terminal, 'e.g. 2'),
-          richField('Seats', 'seg-seats', seg && seg.seats, 'e.g. 2A · 2K')
+          seatChips(seg && seg.seats)
         ]),
         richField('Baggage allowance', 'seg-bag', seg && seg.baggage, 'e.g. 2 × 32 kg + carry-on'),
         richField('Flight notes (optional)', 'seg-notes', seg && seg.notes, 'Specific to this flight')
@@ -1258,7 +1278,10 @@
     var dpt = (card.querySelector('.seg-deptime') || {}).value || '', art = (card.querySelector('.seg-arrtime') || {}).value || '', acf = (card.querySelector('.seg-aircraft') || {}).value || '', dur = (card.querySelector('.seg-duration') || {}).value || '';
     var seg = { airline: airline || null, flight_number: fn || null, cabin: cabin || null, from: f, to: t, depart_date: dt || null, depart_time: dpt || null, arrive_time: art || null, aircraft: acf || null, duration: dur || null };
     function pick(cls, key) { var el = card.querySelector(cls); if (el) { var v = (el.value || '').trim(); if (v) seg[key] = v; } }
-    pick('.seg-seats', 'seats'); pick('.seg-layover-note', 'layover_note'); pick('.seg-conf', 'confirmation'); pick('.seg-opby', 'operated_by'); pick('.seg-depterm', 'dep_terminal'); pick('.seg-arrterm', 'arr_terminal'); pick('.seg-bag', 'baggage'); pick('.seg-notes', 'notes');
+    var seats = Array.prototype.map.call(card.querySelectorAll('.seg-seats-wrap .seat-chip'), function (el) { return el.getAttribute('data-seat'); });
+    var pendSeat = ((card.querySelector('.seg-seats-wrap .seat-input') || {}).value || '').trim(); if (pendSeat) seats.push(pendSeat.toUpperCase());
+    if (seats.length) seg.seats = seats;
+    pick('.seg-layover-note', 'layover_note'); pick('.seg-conf', 'confirmation'); pick('.seg-opby', 'operated_by'); pick('.seg-depterm', 'dep_terminal'); pick('.seg-arrterm', 'arr_terminal'); pick('.seg-bag', 'baggage'); pick('.seg-notes', 'notes');
     var dist = parseInt((card.querySelector('.seg-distance') || {}).value, 10); if (dist > 0) seg.distance_km = dist;
     var cb = card.querySelector('.seg-connect-cb');
     if (cb && cb.checked && !isFirst) {
