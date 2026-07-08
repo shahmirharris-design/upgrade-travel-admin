@@ -212,7 +212,8 @@
       b.classList.toggle('is-active', b.getAttribute('data-tab') === state.tab);
     });
   }
-  function signOut() { teardownRealtime(); state.customers = []; state.selectedId = null; sb.auth.signOut().then(function () { viewLogin(); }).catch(function () { viewLogin(); }); }
+  function doSignOut() { teardownRealtime(); state.customers = []; state.selectedId = null; sb.auth.signOut().then(function () { viewLogin(); }).catch(function () { viewLogin(); }); }
+  function signOut() { confirmDialog({ title: 'Sign out', message: 'Sign out of the admin?', detail: 'Anything mid-edit that is not saved will be lost.', confirmText: 'Sign out', onConfirm: doSignOut }); }
   function mainHead(title, sub) { return h('div', { class: 'main-head' }, [h('h1', { class: 'main-title', text: title }), sub ? h('p', { class: 'main-sub', text: sub }) : null]); }
   function renderTab() {
     var main = document.getElementById('main');
@@ -482,7 +483,7 @@
       h('button', { type: 'button', class: 'task-check' + (t.done ? ' is-checked' : ''), onclick: function () { toggleTask(t); }, title: t.done ? 'Mark not done' : 'Mark done' }),
       h('div', { class: 'task-main' }, [h('div', { class: 'task-title', text: t.title }), meta ? h('div', { class: 'task-meta' + dueCls, text: meta }) : null]),
       t.category ? h('span', { class: 'task-cat ' + catClass(t.category), text: t.category }) : null,
-      h('button', { type: 'button', class: 'task-del', onclick: function () { deleteTask(t.id); }, title: 'Delete', text: '×' })
+      h('button', { type: 'button', class: 'task-del', onclick: function () { confirmDialog({ title: 'Delete task', message: 'Delete \u201c' + (t.title || 'this task') + '\u201d?', danger: true, confirmText: 'Delete task', onConfirm: function () { deleteTask(t.id); } }); }, title: 'Delete', text: '×' })
     ]);
   }
   async function toggleTask(t) {
@@ -1552,7 +1553,7 @@
   function startFresh(isItin) { if (state.docCustomer) clearDraft(draftKind(), state.docCustomer.id); if (isItin) state.itinDraft = null; else state.docDraft = null; renderTab(); }
   function flashEl(flash, isItin) {
     var el = h('div', { class: 'msg ' + flash.kind }, [h('span', { text: flash.text })]);
-    if (flash.restore) el.appendChild(h('button', { type: 'button', class: 'msg-action', onclick: function () { startFresh(isItin); }, text: 'Start fresh instead' }));
+    if (flash.restore) el.appendChild(h('button', { type: 'button', class: 'msg-action', onclick: function () { confirmDialog({ title: 'Start fresh', message: 'Throw away the saved draft and start over?', detail: 'Everything in the draft is lost.', danger: true, confirmText: 'Start fresh', onConfirm: function () { startFresh(isItin); } }); }, text: 'Start fresh instead' }));
     return el;
   }
   var _saveT = null;
@@ -1957,7 +1958,7 @@
         h('div', { class: 'qreq-contact', text: [req.email, req.phone].filter(Boolean).join('  ·  ') }),
         h('div', { class: 'qreq-actions' }, [
           h('button', { type: 'button', class: 'btn btn-primary', style: 'width:auto; padding:8px 15px', onclick: function () { buildFromRequest(req); }, text: 'Link to account & build' }),
-          h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:8px 13px', onclick: function () { archiveRequest(req.id); }, text: 'Dismiss' })
+          h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:8px 13px', onclick: function () { confirmDialog({ title: 'Dismiss request', message: 'Dismiss the request from ' + (req.name || req.email || 'this visitor') + '?', detail: 'It leaves the incoming list. The customer is not notified.', danger: true, confirmText: 'Dismiss', onConfirm: function () { archiveRequest(req.id); } }); }, text: 'Dismiss' })
         ])
       ])
     ]);
@@ -2123,7 +2124,7 @@
       ]),
       h('div', { class: 'inv-section' }, [h('h3', { class: 'inv-h3', text: 'Notes (optional)' }), h('textarea', { id: 'pkg-notes', class: 'inv-input inv-textarea', rows: '2', placeholder: 'Anything to remember about this package.', value: d.notes || '' })]),
       h('div', { class: 'inv-submit' }, [
-        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:13px 24px', onclick: function () { state.pkgBuilding = false; state.pkgView = 'list'; state.pkgDraft = null; renderTab(); }, text: 'Cancel' }),
+        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:13px 24px', onclick: function () { confirmDialog({ title: 'Leave package', message: 'Leave without saving this package?', detail: 'Anything typed here is lost.', danger: true, confirmText: 'Leave', onConfirm: function () { state.pkgBuilding = false; state.pkgView = 'list'; state.pkgDraft = null; renderTab(); } }); }, text: 'Cancel' }),
         h('div', { id: 'pkg-msg', class: 'msg', style: 'display:none' }),
         h('button', { type: 'submit', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: (d && d.id) ? 'Save changes' : 'Save package' })
       ])
@@ -3367,7 +3368,7 @@
         h('label', { class: 'inv-field', style: 'margin-top:16px' }, [h('span', { text: 'Notes (shown on every itinerary)' }), h('textarea', { id: 'gt-notes', class: 'inv-input inv-textarea', rows: '2', placeholder: 'Anything the travelers should know.', value: g.notes || '' })])
       ]),
       h('div', { class: 'inv-submit' }, [
-        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:13px 24px', onclick: function () { state.gt = gtBlank(); renderTab(); }, text: 'Cancel' }),
+        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:13px 24px', onclick: function () { confirmDialog({ title: 'Leave group trip', message: 'Leave without saving?', detail: 'Anything typed into this group trip is lost. \u201cSave for later\u201d keeps it instead.', danger: true, confirmText: 'Leave', onConfirm: function () { state.gt = gtBlank(); renderTab(); } }); }, text: 'Cancel' }),
         h('div', { id: 'gt-msg', class: 'msg', style: 'display:none' }),
         h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto', onclick: function (e) { gtSaveOnly(e.target); }, text: 'Save for later' }),
         h('button', { type: 'submit', id: 'gt-generate-btn', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Generate ' + n + ' itinerar' + (n === 1 ? 'y' : 'ies') })
@@ -3416,7 +3417,7 @@
     var head = h('div', { class: 'gt-itin-head' }, [
       h('div', { class: 'gt-itin-head-main' }, [h('span', { class: 'gt-itin-num', text: 'Itinerary ' + (i + 1) }), h('span', { class: 'gt-itin-summ', text: (pod.label ? pod.label + (summ ? '   ·   ' + summ : '') : summ) })]),
       h('div', { class: 'gt-itin-head-act' }, [
-        state.gt.pods.length > 1 ? h('button', { type: 'button', class: 'gt-itin-rm', title: 'Remove this itinerary', onclick: function (e) { e.stopPropagation(); gtCollectAll(); state.gt.pods.splice(i, 1); renderTab(); }, text: '×' }) : null,
+        state.gt.pods.length > 1 ? h('button', { type: 'button', class: 'gt-itin-rm', title: 'Remove this itinerary', onclick: function (e) { e.stopPropagation(); confirmDialog({ title: 'Remove itinerary', message: 'Remove \u201c' + (pod.label || ('Itinerary ' + (i + 1))) + '\u201d from this group trip?', detail: 'Its travelers and flights are removed from the builder.', danger: true, confirmText: 'Remove', onConfirm: function () { gtCollectAll(); state.gt.pods.splice(i, 1); renderTab(); } }); }, text: '×' }) : null,
         h('span', { class: 'gt-itin-chev' })
       ])
     ]);
