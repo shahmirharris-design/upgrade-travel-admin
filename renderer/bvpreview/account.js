@@ -768,7 +768,7 @@
   /* fine print shown on the itinerary (beautiful view + PDF) so nobody treats a stock photo
      or a scheduled time as a guarantee */
   function itinDisclaimer() {
-    return 'Photos are for inspiration and may not show the exact room, aircraft or venue. Flight times and schedules can change, and delays happen. We keep an eye on your trip and let you know as soon as we hear of a change. Please check your tickets and confirmations for the final details before you travel.';
+    return 'Photos are for inspiration, some via Pexels, and may not show the exact room, aircraft or venue. Flight times and schedules can change, and delays happen. We keep an eye on your trip and let you know as soon as we hear of a change. Please check your tickets and confirmations for the final details before you travel.';
   }
   function ldRouting(row) {
     return h('article', { class: 'ld-card' }, (row.segments || []).map(function (seg, i) {
@@ -1528,6 +1528,20 @@
     }, must);
   }
   /* try async resolvers in order until one yields a URL */
+  /* Pexels via our proxy: licensed, high-resolution, genuinely beautiful photography.
+     Preferred for cities and scenes; the accuracy-gated Commons tiers still win for
+     photos that must show a SPECIFIC building or venue. */
+  var _pexCache = {};
+  function pexelsList(q, cb, n) {
+    q = (q || '').trim(); if (!q) { cb([]); return; }
+    var key = q.toLowerCase() + '|' + (n || 3);
+    if (_pexCache[key]) { cb(_pexCache[key]); return; }
+    fetch(UT_SB.url + '/functions/v1/photo-search?q=' + encodeURIComponent(q) + '&n=' + (n || 3))
+      .then(function (r) { return r.ok ? r.json() : { photos: [] }; })
+      .then(function (d) { var ph = (d && d.photos) || []; _pexCache[key] = ph; cb(ph); })
+      .catch(function () { cb([]); });
+  }
+  function pexelsImg(q, cb) { pexelsList(q, function (ph) { cb(ph.length ? ph[0].url : ''); }, 3); }
   function bvWaterfall(fns, cb) { var i = 0; (function nxt() { if (i >= fns.length) { cb(''); return; } fns[i++](function (u) { u ? cb(u) : nxt(); }); })(); }
   /* per-itinerary city photo overrides picked by the agent at review time */
   var _bvCityOverride = {};
@@ -1535,8 +1549,9 @@
     var key = (city || '').split(',')[0].trim(); if (!key) { cb(''); return; }
     var lk = key.toLowerCase();
     for (var ok in _bvCityOverride) { if (ok.toLowerCase() === lk && _bvCityOverride[ok]) { cb(_bvCityOverride[ok]); return; } }
-    if (CITY_IMAGES[lk]) { cb(CITY_IMAGES[lk]); return; }
     bvWaterfall([
+      function (c) { pexelsImg(key + ' city travel', c); },
+      function (c) { c(CITY_IMAGES[lk] || ''); },
       function (c) { wikiSummaryImg(key, c); },
       function (c) { commonsSearchImg(key + ' skyline', c); },
       function (c) { commonsSearchImg(key + ' cityscape', c); },
@@ -1554,6 +1569,8 @@
       function (c) { name && street ? commonsSearchImg(name + ' ' + street, c, '', must) : c(''); },
       /* Wikipedia only accepts articles that are ABOUT a hotel/building (never a person) */
       function (c) { name ? wikiSummaryImg(name, c, /hotel|resort|tower|skyscraper|building|palace|lodge|casino/i) : c(''); },
+      function (c) { name ? pexelsImg(name + ' hotel' + (city ? ' ' + city : ''), c) : c(''); },
+      function (c) { city ? pexelsImg('luxury hotel ' + city, c) : c(''); },
       function (c) { city ? commonsSearchImg('luxury hotel resort ' + city, c) : c(''); },
       function (c) { city ? cityImageURL(city, c) : c(''); }
     ], cb);
@@ -1561,7 +1578,9 @@
   function cabinImageURL(airline, aircraft, cabin, cb) {
     var ak = bvAirlineKey(airline), ck = bvCabinKey(cabin);
     if (CABIN_IMAGES[ak] && CABIN_IMAGES[ak][ck]) { cb(CABIN_IMAGES[ak][ck]); return; }
-    cb(ck === 'first' ? CATEGORY_IMAGES.first_cabin : CATEGORY_IMAGES.business_cabin);
+    pexelsImg(ck === 'first' ? 'first class airplane cabin luxury' : 'business class airplane cabin', function (u) {
+      cb(u || (ck === 'first' ? CATEGORY_IMAGES.first_cabin : CATEGORY_IMAGES.business_cabin));
+    });
   }
   function venueImageURL(name, category, city, addr, cb) {
     var cat = bvCategoryImg((name || '') + ' ' + (category || ''));
@@ -1571,7 +1590,8 @@
       /* the exact place at its exact location; filename must name the venue or the tier fails */
       function (c) { name && city ? commonsSearchImg('"' + name + '" ' + city, c, '', must) : c(''); },
       function (c) { name ? commonsSearchImg(name + (city ? ' ' + city : '') + (street ? ' ' + street : ''), c, '', must) : c(''); },
-      /* no verified photo of the place itself → a beautiful curated stand-in, then the city */
+      /* no verified photo of the place itself: a beautiful licensed scene, then curated, then the city */
+      function (c) { pexelsImg(((category || name || '') + (city ? ' ' + city : '')).trim(), c); },
       function (c) { c(cat); },
       function (c) { city ? cityImageURL(city, c) : c(''); }
     ], cb);
@@ -1618,14 +1638,23 @@
       if (key) { queries.push([key + ' skyline', null]); queries.push([key + ' cityscape', null]); queries.push([key + ' aerial view', null]); }
     }
     var out = [], seen = {}, qi = 0;
-    (function next() {
-      if (qi >= queries.length || out.length >= 12) { done(out.slice(0, 12)); return; }
+    function finish() { done(out.slice(0, 12)); }
+    function commonsNext() {
+      if (qi >= queries.length || out.length >= 12) { finish(); return; }
       var qq = queries[qi++];
       commonsSearchList(qq[0], function (cand) {
         (cand || []).forEach(function (c) { if (!seen[c.u] && out.length < 12) { seen[c.u] = 1; out.push({ url: c.u, title: c.t }); } });
-        next();
+        commonsNext();
       }, qq[1]);
-    })();
+    }
+    /* licensed Pexels shots lead the rail; accuracy-gated Commons results follow */
+    var pexQ = slot.kind === 'hotel' ? ((name ? name + ' hotel ' : 'luxury hotel ') + city).trim()
+      : slot.kind === 'venue' ? (((slot.cat || name || '') + ' ' + city).trim() || name)
+      : ((city || name) + ' city travel');
+    pexelsList(pexQ, function (ph) {
+      (ph || []).forEach(function (p2) { if (!seen[p2.url] && out.length < 6) { seen[p2.url] = 1; out.push({ url: p2.url, title: p2.alt || 'Pexels' }); } });
+      commonsNext();
+    }, 6);
   }
   if (window.UT_ITIN_PREVIEW) {
     window.addEventListener('message', function (ev) {
