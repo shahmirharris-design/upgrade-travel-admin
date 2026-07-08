@@ -548,8 +548,20 @@
     pdfOpt = pdfOpt || {};
     var win = null;
     if (mode === 'open') { win = window.open('', '_blank'); if (win) { try { win.document.title = 'Preparing PDF…'; } catch (e) { } } }
+    /* photos resolve asynchronously; give late banners a moment so none export as dark gradients */
+    function waitForPhotos(cb) {
+      var tries = 0, last = -1;
+      (function poll() {
+        var pending = 0;
+        Array.prototype.forEach.call(docNode.querySelectorAll('.bv-ph'), function (el) { if (!el.classList.contains('bv-has-img')) pending++; });
+        if (pending === 0 || (pending === last && tries > 2) || tries >= 12) { cb(); return; }
+        last = pending; tries++;
+        setTimeout(poll, 300);
+      })();
+    }
     ensureHtml2pdf(function () {
       if (!window.html2pdf) { if (win) win.close(); window.print(); return; }
+      waitForPhotos(function () {
       var holder = h('div', { class: 'pdf-holder' });
       holder.appendChild(h('div', { class: 'pdf-holder-note', text: 'Preparing your PDF…' }));
       var page = h('div', { class: 'pdf-page' });
@@ -569,15 +581,48 @@
         } catch (e) { }
         return pdf;
       };
+      /* every page one solid paper sheet: the canvas is stretched to an exact page multiple
+         (so the last page has no white remainder) and the margin strips are painted paper */
+      var mArr = Array.isArray(opt.margin) ? opt.margin : [opt.margin, opt.margin, opt.margin, opt.margin];
+      var paintPages = function (pdf) {
+        if (!pdfOpt.pageBg) return pdf;
+        try {
+          var pn = pdf.internal.getNumberOfPages(), pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+          pdf.setFillColor(pdfOpt.pageBg[0], pdfOpt.pageBg[1], pdfOpt.pageBg[2]);
+          for (var pi = 1; pi <= pn; pi++) {
+            pdf.setPage(pi);
+            if (mArr[0] > 0) pdf.rect(0, 0, pw, mArr[0] + 0.6, 'F');
+            if (mArr[2] > 0) pdf.rect(0, ph - mArr[2] - 0.6, pw, mArr[2] + 0.6, 'F');
+            if (mArr[1] > 0) pdf.rect(pw - mArr[1] - 0.6, 0, mArr[1] + 0.6, ph, 'F');
+            if (mArr[3] > 0) pdf.rect(0, 0, mArr[3] + 0.6, ph, 'F');
+          }
+        } catch (e) { }
+        return pdf;
+      };
+      if (pdfOpt.pageBg) {
+        try {
+          var dims = (opt.jsPDF.format === 'letter') ? [215.9, 279.4] : [210, 297];
+          var innerW = dims[0] - mArr[1] - mArr[3], innerH = dims[1] - mArr[0] - mArr[2];
+          var nodeEl = page.firstChild;
+          var wPx = nodeEl.getBoundingClientRect().width || nodeEl.offsetWidth;
+          if (wPx > 0 && innerW > 0 && innerH > 0) {
+            var pxPerMm = wPx / innerW, contentHpx = innerH * pxPerMm;
+            var pagesN = Math.max(1, Math.ceil(nodeEl.scrollHeight / contentHpx));
+            nodeEl.style.minHeight = Math.ceil(pagesN * contentHpx) + 'px';
+          }
+        } catch (e) { }
+      }
       /* wait for the serif webfont so the PDF embeds it, not a fallback; then render once */
       var ready = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
       ready.then(function () {
         window.html2pdf().set(opt).from(page.firstChild).toPdf().get('pdf').then(function (pdf) {
+          paintPages(pdf);
           stampPages(pdf);
           if (mode === 'open') { var url = pdf.output('bloburl'); if (win) win.location.href = url; else window.open(url, '_blank'); }
           else { pdf.save(opt.filename); }
           done();
         }).catch(function () { if (win) win.close(); done(); });
+      });
       });
     });
   }
@@ -742,7 +787,7 @@
     }
     return out;
   }
-  var LD_PDF = { format: 'letter', margin: 0, bg: '#F4EDDF' };
+  var LD_PDF = { format: 'letter', margin: [10, 0, 10, 0], bg: '#F4EDDF', pageBg: [244, 237, 223] };
   function ldMast(eyebrow) {
     return h('header', { class: 'ld-mast' }, [
       h('div', { class: 'ld-brand' }, [h('span', { class: 'ld-mark' }), h('span', { class: 'ld-brand-name', text: agencyName() })]),

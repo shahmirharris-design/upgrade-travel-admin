@@ -1957,13 +1957,10 @@ html.acct-modal-open, body.acct-modal-open{ overflow:hidden; }
 .bv-checkin{ align-self:center; }
 
 
-/* PDF chapters: every city (and closing chapters) starts on its own page, with safe air
-   at the top of the new page so nothing prints against the trim edge */
-.ld-page{ page-break-before: always; break-before: page; border-top:30px solid #F4EDDF; }
-.ld-banner.ld-page{ margin-top:14px; }
-.ld-group-label.ld-page{ margin-top:0; }
+/* PDF chapters: every city (and closing chapters) starts on its own page. Page air comes
+   from real PDF margins painted paper-color in makeDocPDF, so no border hacks here. */
+.ld-page{ page-break-before: always; break-before: page; }
 .ld-card, .ld-note, .ld-banner, .ld-day{ page-break-inside: avoid; }
-.ld-banner.ld-page .ld-banner-img, .ld-banner.ld-page::after{ border-radius:14px; }
 
 
 /* typographic wrapping: even heading lines, no orphaned last words in prose */
