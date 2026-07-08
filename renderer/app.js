@@ -82,6 +82,7 @@
       viewApp();
       subscribeRealtime();
       registerUpdateStatus();
+      loadReqBarCount();
     } catch (e) {
       viewLogin('Could not connect. Check your internet connection and try again.');
     }
@@ -175,7 +176,9 @@
     { label: 'Library', items: [['packages', 'Packages']] }
   ];
   function navButton(n) {
-    var b = h('button', { class: state.tab === n[0] ? 'is-active' : '', 'data-tab': n[0] }, [svgIcon(ICONS[n[0]]), h('span', { text: n[1] })]);
+    var kids = [svgIcon(ICONS[n[0]]), h('span', { text: n[1] })];
+    if (n[0] === 'quotes') kids.push(h('span', { class: 'nav-badge', id: 'nav-badge-quotes', style: 'display:none' }));
+    var b = h('button', { class: state.tab === n[0] ? 'is-active' : '', 'data-tab': n[0] }, kids);
     b.addEventListener('click', function () { state.tab = n[0]; refreshNav(); renderTab(); });
     return b;
   }
@@ -268,10 +271,10 @@
     dash.textContent = '';
     var tw = dashTasksWidget(res[5].data || [], todayISO()); if (tw) dash.appendChild(tw);
     dash.appendChild(h('div', { class: 'dash-row dash-hero' }, [
-      statCard('Revenue billed', money(revenue, 'USD'), 'This month ' + money(mRevenue, 'USD'), 'gold'),
-      statCard('Saved for clients', money(saved, 'USD'), 'across ' + invCount + ' invoice' + (invCount === 1 ? '' : 's'), 'green'),
-      statCard('Customers', String(custCount), 'with an account', null),
-      statCard('Open requests', String(newReqs), newReqs ? 'awaiting a quote' : 'all caught up', newReqs ? 'amber' : null)
+      statCard('Revenue billed', money(revenue, 'USD'), 'This month ' + money(mRevenue, 'USD'), 'gold', function () { gotoDocList('invoices'); }),
+      statCard('Saved for clients', money(saved, 'USD'), 'across ' + invCount + ' invoice' + (invCount === 1 ? '' : 's'), 'green', function () { gotoDocList('invoices'); }),
+      statCard('Customers', String(custCount), 'with an account', null, function () { state.tab = 'customers'; refreshNav(); renderTab(); }),
+      statCard('Open requests', String(newReqs), newReqs ? 'awaiting a quote' : 'all caught up', newReqs ? 'amber' : null, function () { gotoDocList('quotes', 'requests'); })
     ]));
     var perf = h('div', { class: 'dash-panel' }, [
       h('div', { class: 'dash-panel-h', text: 'Quotes' }),
@@ -294,10 +297,18 @@
     ]));
     dash.appendChild(h('button', { type: 'button', class: 'dash-refresh', onclick: loadDashboard, text: '↻ Refresh' }));
   }
-  function statCard(label, value, sub, accent) {
-    return h('div', { class: 'dash-card' + (accent ? ' dash-card--' + accent : '') }, [
+  function statCard(label, value, sub, accent, go) {
+    var el = h('div', { class: 'dash-card' + (accent ? ' dash-card--' + accent : '') + (go ? ' dash-card--link' : '') }, [
       h('div', { class: 'dash-k', text: label }), h('div', { class: 'dash-v', text: value }), sub ? h('div', { class: 'dash-sub', text: sub }) : null
     ]);
+    if (go) el.addEventListener('click', go);
+    return el;
+  }
+  /* land on a tab's LIST page: first render establishes the builder, second applies the view */
+  function gotoDocList(tab, view) {
+    state.tab = tab; refreshNav(); renderTab();
+    if (tab === 'itineraries') state.itinView = 'list'; else state.docView = view || 'list';
+    renderTab();
   }
   function funnelStat(label, n, accent) {
     return h('div', { class: 'dash-funnel-c' + (accent ? ' df-' + accent : '') }, [h('div', { class: 'dash-funnel-n', text: String(n) }), h('div', { class: 'dash-funnel-k', text: label })]);
@@ -661,7 +672,7 @@
     _rtChannel = sb.channel('profiles-live')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'profiles' }, function (p) { upsertCustomer(p.new); })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, function (p) { upsertCustomer(p.new); })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'quote_requests' }, function () { if (state.tab === 'quotes' && state.docView === 'requests') loadRequests(); else if (state.tab === 'quotes' && state.docView === 'form') loadReqBarCount(); else if (state.tab === 'dashboard') loadDashboard(); });
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'quote_requests' }, function () { loadReqBarCount(); if (state.tab === 'quotes' && state.docView === 'requests') loadRequests(); else if (state.tab === 'dashboard') loadDashboard(); });
     _rtChannel.subscribe();
   }
   /* remove the live channel and clear the guard so the next sign-in re-subscribes cleanly. Idempotent. */
@@ -1497,15 +1508,27 @@
       sb.from('invoices').select('*').order('created_at', { ascending: false }).limit(200),
       sb.from('invoice_finance').select('invoice_id, net_cost')
     ]);
-    box = document.getElementById('invlist-box'); if (!box) return;
-    var invs = res[0].data || [], fin = res[1].data || [], costMap = {};
-    fin.forEach(function (f) { costMap[f.invoice_id] = f.net_cost; });
-    box.textContent = '';
+    if (!document.getElementById('invlist-box')) return;
+    state.allInvoices = res[0].data || [];
+    state.invCostMap = {};
+    (res[1].data || []).forEach(function (f) { state.invCostMap[f.invoice_id] = f.net_cost; });
+    renderInvoiceList();
+  }
+  function renderInvoiceList() {
+    var box = document.getElementById('invlist-box'); if (!box) return;
+    var invs = state.allInvoices || []; box.textContent = '';
     if (!invs.length) { box.appendChild(h('div', { class: 'pkg-empty', text: 'No invoices sent yet.' })); return; }
+    var needle = (state.invSearch || '').trim().toLowerCase();
+    var shown = !needle ? invs : invs.filter(function (i) { return ((i.invoice_number || '') + ' ' + (i.title || '') + ' ' + (i.customer_email || '') + ' ' + findCustomerNameByEmail(i.customer_email) + ' ' + quoteRouteLabel(i)).toLowerCase().indexOf(needle) > -1; });
     var outstanding = 0; invs.forEach(function (i) { outstanding += Math.max(dnum(i.total_charged) - dnum(i.amount_paid), 0); });
     box.appendChild(h('div', { class: 'sq-wrap' }, [
-      h('div', { class: 'invlist-head' }, [h('h3', { class: 'sq-h', text: 'Invoices · ' + invs.length }), h('span', { class: 'invlist-out' + (outstanding > 0 ? ' is-due' : ''), text: outstanding > 0 ? money(outstanding, invs[0].currency || 'USD') + ' outstanding' : 'All settled ✓' })])
-    ].concat(invs.map(function (inv) { return invoiceRow(inv, costMap[inv.id]); }))));
+      h('div', { class: 'invlist-head' }, [h('h3', { class: 'sq-h', text: 'Invoices · ' + (needle ? shown.length + ' of ' + invs.length : invs.length) }), h('span', { class: 'invlist-out' + (outstanding > 0 ? ' is-due' : ''), text: outstanding > 0 ? money(outstanding, invs[0].currency || 'USD') + ' outstanding' : 'All settled ✓' })])
+    ].concat(shown.length ? shown.map(function (inv) { return invoiceRow(inv, state.invCostMap[inv.id]); }) : [h('p', { class: 'qf-empty', text: 'Nothing matches that search.' })])));
+  }
+  async function deleteInvoiceRow(inv) {
+    try { await sb.from('invoice_finance').delete().eq('invoice_id', inv.id); } catch (e) { /* may not exist */ }
+    try { await sb.from('invoices').delete().eq('id', inv.id); } catch (e) { console.warn('delete invoice failed', e); }
+    loadInvoiceList();
   }
   function invoiceRow(inv, netCost) {
     var total = dnum(inv.total_charged), paid = dnum(inv.amount_paid), bal = Math.max(total - paid, 0);
@@ -1525,7 +1548,8 @@
         : [h('button', { type: 'button', class: 'btn btn-primary', style: 'width:auto; padding:8px 14px', onclick: function (e) { startRecordPayment(e.target.closest('.invrow'), inv, bal); }, text: 'Record payment' })]
       ).concat([
         h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:8px 14px', onclick: function () { adminOverlay(invoiceDetail(inv, netCost), 'Invoice ' + (inv.invoice_number || '')); }, text: 'View' }),
-        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:8px 14px', onclick: function () { editInvoice(inv, netCost); }, text: 'Edit & resend' })
+        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:8px 14px', onclick: function () { editInvoice(inv, netCost); }, text: 'Edit & resend' }),
+        h('button', { type: 'button', class: 'btn btn-ghost pkg-del-btn', style: 'width:auto; padding:8px 14px', onclick: function () { confirmDialog({ title: 'Delete invoice', message: 'Delete ' + (inv.invoice_number || 'this invoice') + '?', detail: 'It disappears from the customer\u2019s account, along with its recorded payments and profit. This cannot be undone.', danger: true, confirmText: 'Delete invoice', onConfirm: function () { deleteInvoiceRow(inv); } }); }, text: 'Delete' })
       ]))
     ]);
   }
@@ -1599,10 +1623,11 @@
     return bar;
   }
   async function loadReqBarCount() {
-    var el = document.getElementById('req-bar-count'); if (!el) return;
     var r = await sb.from('quote_requests').select('id', { count: 'exact', head: true }).eq('status', 'new');
-    el = document.getElementById('req-bar-count'); if (!el) return;
-    el.textContent = (r.count != null ? r.count : 0);
+    var nCount = r.count != null ? r.count : 0;
+    var el = document.getElementById('req-bar-count'); if (el) el.textContent = String(nCount);
+    var badge = document.getElementById('nav-badge-quotes');
+    if (badge) { badge.textContent = String(nCount); badge.style.display = nCount > 0 ? '' : 'none'; }
   }
   function findCustomerForDoc(q) {
     var c = null, em = (q.customer_email || '').toLowerCase();
@@ -1700,6 +1725,8 @@
       return h('button', { type: 'button', class: 'qf-chip' + (filt === f[0] ? ' is-active' : ''), onclick: function () { state.quoteFilter = f[0]; renderSentQuotes(); }, text: f[1] + ' (' + (counts[f[0]] || 0) + ')' });
     });
     var shown = filt === 'all' ? qs : qs.filter(function (q) { return (q.status || 'sent') === filt; });
+    var qNeedle = (state.qSearch || '').trim().toLowerCase();
+    if (qNeedle) shown = shown.filter(function (q) { return ((q.quote_number || '') + ' ' + (q.title || '') + ' ' + (q.customer_email || '') + ' ' + findCustomerNameByEmail(q.customer_email) + ' ' + quoteRouteLabel(q)).toLowerCase().indexOf(qNeedle) > -1; });
     box.appendChild(h('div', { class: 'sq-wrap' }, [
       h('div', { class: 'sq-head-row' }, [h('h3', { class: 'sq-h', text: 'Your quotes' }), h('div', { class: 'qf-chips' }, chips)])
     ].concat(shown.length ? shown.map(sentQuoteCard) : [h('p', { class: 'qf-empty', text: 'No ' + (filt === 'all' ? '' : filt + ' ') + 'quotes yet.' })])));
@@ -1716,9 +1743,22 @@
         h('button', { type: 'button', class: 'btn btn-primary', style: 'width:auto; padding:8px 14px', onclick: function () { adminOverlay(quoteDetail(q), 'Quote ' + (q.quote_number || '')); }, text: 'View' }),
         h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:8px 14px', onclick: function () { editQuote(q); }, text: 'Edit & resend' }),
         h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:8px 14px', onclick: function () { convertQuoteToInvoice(q); }, text: '→ Invoice' }),
-        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:8px 14px', onclick: function () { convertQuoteToItinerary(q); }, text: '→ Itinerary' })
+        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:8px 14px', onclick: function () { convertQuoteToItinerary(q); }, text: '→ Itinerary' }),
+        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:8px 14px', onclick: function () { duplicateQuote(q); }, text: 'Duplicate' }),
+        h('button', { type: 'button', class: 'btn btn-ghost pkg-del-btn', style: 'width:auto; padding:8px 14px', onclick: function () { confirmDialog({ title: 'Delete quote', message: 'Delete ' + (q.quote_number || 'this quote') + '?', detail: 'It disappears from the customer\u2019s account too. This cannot be undone.', danger: true, confirmText: 'Delete quote', onConfirm: function () { deleteQuoteRow(q); } }); }, text: 'Delete' })
       ])
     ]);
+  }
+  function duplicateQuote(q) {
+    state.docCustomer = findCustomerForDoc(q);
+    state.builderTab = 'quote'; state.docKind = 'quote';
+    state.docDraft = { title: q.title || '', destination: q.destination || '', trip_type: q.trip_type || null, segments: q.segments || [], pax_adults: q.pax_adults != null ? q.pax_adults : 1, pax_children: q.pax_children || 0, pax_infants: q.pax_infants || 0, booking_reference: q.booking_reference || '', line_items: q.line_items || [], currency: q.currency || 'USD', comparable_total: q.comparable_total || null, valid_until: null, options: q.options || [], notes: q.notes || '' };
+    state.docFlash = { kind: 'note', text: 'Duplicated from ' + (q.quote_number || 'the quote') + '. Adjust anything, then send as a new quote.' };
+    state.docView = 'form'; state.tab = 'quotes'; refreshNav(); renderTab();
+  }
+  async function deleteQuoteRow(q) {
+    try { await sb.from('quotes').delete().eq('id', q.id); } catch (e) { console.warn('delete quote failed', e); }
+    loadSentQuotes();
   }
   function convertQuoteToInvoice(q) {
     state.docCustomer = findCustomerForDoc(q);
@@ -1800,7 +1840,7 @@
       ])
     ]);
   }
-  function archiveRequest(id) { sb.from('quote_requests').update({ status: 'archived' }).eq('id', id).then(function () { loadRequests(); }).catch(function (e) { console.warn('archive request failed', e); }); }
+  function archiveRequest(id) { sb.from('quote_requests').update({ status: 'archived' }).eq('id', id).then(function () { loadRequests(); loadReqBarCount(); }).catch(function (e) { console.warn('archive request failed', e); }); }
   function parseToISODate(s) {
     if (!s) return null;
     if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
@@ -2064,7 +2104,10 @@
       var isInv = c.head === 'INVOICE';
       wrap.appendChild(mainHead(isInv ? 'Invoices' : 'Quotes', isInv ? 'View or edit any invoice you’ve sent.' : 'View or edit any quote you’ve sent.'));
       var lb = h('div', { class: 'main-body' });
-      lb.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-bottom:18px', onclick: function () { state.docView = 'form'; renderTab(); }, text: isInv ? '← New invoice' : '← New quote' }));
+      lb.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-bottom:14px', onclick: function () { state.docView = 'form'; renderTab(); }, text: isInv ? '← New invoice' : '← New quote' }));
+      var dsearch = h('input', { class: 'inv-input list-search', type: 'text', placeholder: isInv ? 'Search invoices by customer, number or route…' : 'Search quotes by customer, number or route…', autocomplete: 'off', value: (isInv ? state.invSearch : state.qSearch) || '' });
+      dsearch.addEventListener('input', function () { if (isInv) { state.invSearch = dsearch.value; renderInvoiceList(); } else { state.qSearch = dsearch.value; renderSentQuotes(); } });
+      lb.appendChild(dsearch);
       lb.appendChild(h('div', { id: isInv ? 'invlist-box' : 'sentq-box' }, [h('div', { class: 'dash-loading', text: isInv ? 'Loading invoices…' : 'Loading quotes…' })]));
       wrap.appendChild(lb); setTimeout(isInv ? loadInvoiceList : loadSentQuotes, 0); return wrap;
     }
@@ -2275,7 +2318,7 @@
     else { r = await sb.from(c.table).insert(payload).select().maybeSingle(); }
     btn.disabled = false; btn.textContent = c.send;
     if (r.error) { showInvMsg(msg, r.error.message || 'Could not send.', 'err'); return; }
-    if (state.docKind === 'quote' && d.request_id) { sb.from('quote_requests').update({ status: 'quoted' }).eq('id', d.request_id).then(function () {}).catch(function (e) { console.warn('mark request quoted failed', e); }); }
+    if (state.docKind === 'quote' && d.request_id) { sb.from('quote_requests').update({ status: 'quoted' }).eq('id', d.request_id).then(function () { loadReqBarCount(); }).catch(function (e) { console.warn('mark request quoted failed', e); }); }
     if (state.docKind === 'invoice' && r.data && d.net_cost != null) { sb.from('invoice_finance').upsert({ invoice_id: r.data.id, net_cost: d.net_cost }).then(function () {}).catch(function (e) { console.warn('save invoice finance failed', e); }); }
     if (state.docKind === 'invoice' && d.source_quote_id) { sb.from('quotes').update({ status: 'accepted' }).eq('id', d.source_quote_id).then(function () {}).catch(function (e) { console.warn('mark quote accepted failed', e); }); }
     var num = (r.data && r.data[c.numKey]) ? r.data[c.numKey] : (d.editing_number || '');
@@ -2619,7 +2662,10 @@
     if (state.itinView === 'list') {
       wrap.appendChild(mainHead('Sent itineraries', 'View or edit any itinerary you’ve sent.'));
       var lb = h('div', { class: 'main-body' });
-      lb.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-bottom:18px', onclick: function () { state.itinView = 'form'; renderTab(); }, text: '← New itinerary' }));
+      lb.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-bottom:14px', onclick: function () { state.itinView = 'form'; renderTab(); }, text: '← New itinerary' }));
+      var isearch = h('input', { class: 'inv-input list-search', type: 'text', placeholder: 'Search itineraries by customer, number or destination…', autocomplete: 'off', value: state.itSearch || '' });
+      isearch.addEventListener('input', function () { state.itSearch = isearch.value; renderItinList(); });
+      lb.appendChild(isearch);
       lb.appendChild(h('div', { id: 'sentitin-list' }, [h('div', { class: 'dash-loading', text: 'Loading itineraries…' })]));
       wrap.appendChild(lb); setTimeout(loadSentItins, 0); return wrap;
     }
@@ -2647,12 +2693,31 @@
     el.textContent = (r.count != null ? r.count : 0);
   }
   async function loadSentItins() {
-    var box = document.getElementById('sentitin-list'); if (!box) return;
+    if (!document.getElementById('sentitin-list')) return;
     var r = await sb.from('itineraries').select('*').order('created_at', { ascending: false }).limit(200);
-    box = document.getElementById('sentitin-list'); if (!box) return;
-    var rows = r.data || []; box.textContent = '';
+    if (!document.getElementById('sentitin-list')) return;
+    state.allItins = r.data || [];
+    renderItinList();
+  }
+  function renderItinList() {
+    var box = document.getElementById('sentitin-list'); if (!box) return;
+    var rows = state.allItins || []; box.textContent = '';
     if (!rows.length) { box.appendChild(h('div', { class: 'pkg-empty', text: 'No itineraries sent yet.' })); return; }
-    box.appendChild(h('div', { class: 'sq-wrap' }, rows.map(itinListRow)));
+    var needle = (state.itSearch || '').trim().toLowerCase();
+    var shown = !needle ? rows : rows.filter(function (row) { return ((row.itinerary_number || '') + ' ' + (row.title || '') + ' ' + (row.destination || '') + ' ' + (row.customer_email || '') + ' ' + findCustomerNameByEmail(row.customer_email) + ' ' + (row.traveler_names || '')).toLowerCase().indexOf(needle) > -1; });
+    if (!shown.length) { box.appendChild(h('p', { class: 'qf-empty', text: 'Nothing matches that search.' })); return; }
+    box.appendChild(h('div', { class: 'sq-wrap' }, shown.map(itinListRow)));
+  }
+  function duplicateItinerary(row) {
+    state.docCustomer = findCustomerForDoc(row);
+    state.builderTab = 'itinerary';
+    state.itinDraft = { title: row.title || '', destination: row.destination || '', trip_type: row.trip_type || null, start_date: row.start_date || null, end_date: row.end_date || null, pax_adults: row.pax_adults != null ? row.pax_adults : 1, pax_children: row.pax_children || 0, pax_infants: row.pax_infants || 0, traveler_names: row.traveler_names || '', segments: row.segments || [], hotels: row.hotels || [], transport: row.transport || [], entertainment: row.entertainment || [], cruises: row.cruises || [], day_notes: row.day_notes || [], documents: row.documents || [], notes: row.notes || '', total_charged: row.total_charged || null, comparable_total: row.comparable_total || null, currency: row.currency || 'USD', price_invoice_number: row.price_invoice_number || null, city_images: row.city_images || null };
+    state.itinFlash = { kind: 'note', text: 'Duplicated from ' + (row.itinerary_number || 'the itinerary') + '. Change the customer or details, then send as a new itinerary.' };
+    state.itinView = 'form'; state.tab = 'itineraries'; refreshNav(); renderTab();
+  }
+  async function deleteItinRow(row) {
+    try { await sb.from('itineraries').delete().eq('id', row.id); } catch (e) { console.warn('delete itinerary failed', e); }
+    loadSentItins();
   }
   function itinListRow(row) {
     var cust = findCustomerForDoc(row);
@@ -2675,7 +2740,9 @@
           function done() { btn.textContent = 'Link copied ✓'; setTimeout(function () { btn.textContent = 'Copy link'; }, 1800); }
           if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(link).then(done).catch(function () { window.prompt('Copy this link:', link); });
           else window.prompt('Copy this link:', link);
-        }, text: 'Copy link' }) : null
+        }, text: 'Copy link' }) : null,
+        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:8px 14px', onclick: function () { duplicateItinerary(row); }, text: 'Duplicate' }),
+        h('button', { type: 'button', class: 'btn btn-ghost pkg-del-btn', style: 'width:auto; padding:8px 14px', onclick: function () { confirmDialog({ title: 'Delete itinerary', message: 'Delete ' + (row.itinerary_number || 'this itinerary') + '?', detail: 'It disappears from the customer\u2019s account and any share links stop working. This cannot be undone.', danger: true, confirmText: 'Delete itinerary', onConfirm: function () { deleteItinRow(row); } }); }, text: 'Delete' })
       ])
     ]);
   }
@@ -2707,7 +2774,13 @@
     state.itinView = 'form'; state.tab = 'itineraries'; refreshNav(); renderTab();
   }
   function itinSection(title, containerId, cards, addLabel, addFn, bare) {
-    return h('div', { class: bare ? 'gt-subsec' : 'inv-section' }, [h('h3', { class: bare ? 'gt-subsec-h' : 'inv-h3', text: title }), h('div', { id: containerId, class: 'itin-cards' }, cards), h('button', { type: 'button', class: 'inv-addline', onclick: addFn, text: addLabel })]);
+    var empty = !cards || !cards.length;
+    var sec = h('div', { class: (bare ? 'gt-subsec' : 'inv-section') + (empty ? ' sec-slim' : '') }, [
+      h('h3', { class: bare ? 'gt-subsec-h' : 'inv-h3', text: title }),
+      h('div', { id: containerId, class: 'itin-cards' }, cards),
+      h('button', { type: 'button', class: 'inv-addline', onclick: function () { sec.classList.remove('sec-slim'); addFn(); }, text: addLabel })
+    ]);
+    return sec;
   }
   function itinForm(d) {
     d = d || {};

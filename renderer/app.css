@@ -769,3 +769,16 @@ input{ font-family:inherit; }
 .qo-head{ margin-bottom:6px; }
 .qo-head span{ font-size:11px; letter-spacing:.04em; color:var(--stone); }
 .qo-row{ margin-bottom:8px; }
+
+/* efficiency pass: nav lead badge, list search, clickable KPIs, slim empty sections */
+.nav-badge{ margin-left:auto; background:var(--gold); color:var(--deep); font-size:11px; font-weight:700; border-radius:999px; padding:1px 8px; min-width:20px; text-align:center; }
+.list-search{ margin-bottom:14px; max-width:520px; }
+.dash-card--link{ cursor:pointer; transition:transform .12s, box-shadow .12s; }
+.dash-card--link:hover{ transform:translateY(-2px); box-shadow:0 10px 26px -18px rgba(0,0,0,.35); }
+.inv-section.sec-slim{ padding:14px 24px; display:flex; align-items:center; justify-content:space-between; gap:14px; }
+.inv-section.sec-slim h3{ margin:0; }
+.inv-section.sec-slim .itin-cards{ display:none; }
+.inv-section.sec-slim .inv-addline{ margin:0; }
+.gt-subsec.sec-slim{ display:flex; align-items:center; justify-content:space-between; gap:14px; }
+.gt-subsec.sec-slim .gt-subsec-h{ margin:0; }
+.gt-subsec.sec-slim .itin-cards{ display:none; }
