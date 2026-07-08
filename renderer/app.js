@@ -416,7 +416,19 @@
       if (items.length) days.push([i, d, items]);
     }
     var kids = [h('div', { class: 'dash-panel-h' }, [h('span', { text: 'Next 7 days' }), h('button', { type: 'button', class: 'dash-panel-link', onclick: function () { state.tab = 'calendar'; refreshNav(); renderTab(); }, text: 'Full calendar →' })])];
-    if (!days.length) kids.push(h('p', { class: 'dash-empty', text: 'A quiet week ahead.' }));
+    if (!days.length) {
+      kids.push(h('p', { class: 'dash-empty', text: 'A quiet week ahead.' }));
+      /* still show the horizon: the next departure beyond this week */
+      var future = its.filter(function (it) { return it.start_date && it.start_date > addDays(today, 6); }).sort(function (a, b) { return a.start_date.localeCompare(b.start_date); });
+      if (future.length) {
+        var nx = future[0];
+        var whoN = (nx.traveler_names ? ('' + nx.traveler_names).split(/\n|,/)[0] : '') || findCustomerNameByEmail(nx.customer_email) || nx.customer_email || '';
+        kids.push(h('button', { type: 'button', class: 'dash-day-item', onclick: function () { adminOverlay(itinDetail(nx), 'Itinerary ' + (nx.itinerary_number || '')); } }, [
+          h('span', { class: 'dash-att-dot dash-att-dot--dep' }),
+          h('span', { text: 'Next departure: ' + fmtDate(nx.start_date) + ' · ' + whoN + (nx.title ? ' · ' + nx.title : '') })
+        ]));
+      }
+    }
     days.forEach(function (dy) {
       var label = dy[0] === 0 ? 'Today' : dy[0] === 1 ? 'Tomorrow' : new Date(dy[1] + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
       kids.push(h('div', { class: 'dash-day' }, [h('div', { class: 'dash-day-l', text: label })].concat(dy[2].map(function (itx) {
