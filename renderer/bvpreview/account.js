@@ -1064,7 +1064,17 @@
     if (paid > 0) { totals.push(['Paid to date', '− ' + money(paid, cur), false]); totals.push([bal > 0.001 ? 'Balance due' : 'Settled in full', money(bal, cur), true]); }
     doc.appendChild(ldCharges(inv.line_items || [], cur, totals));
     if (comp > total) doc.appendChild(ldSave(comp, total, cur));
-    if (state.settings && state.settings.payment_details && bal > 0.001) doc.appendChild(h('div', { class: 'ld-note' }, [h('div', { class: 'ld-sumlabel', text: 'Payment' }), h('p', { text: state.settings.payment_details })]));
+    if (bal > 0.001) {
+      var s2 = state.settings || {};
+      var PAY = { wire: ['Wire / bank transfer', s2.payment_details], stripe: ['Pay by card', s2.pay_stripe], paypal: ['PayPal', s2.pay_paypal], zelle: ['Zelle', s2.pay_zelle] };
+      var keys = (inv.payment_methods && inv.payment_methods.length) ? inv.payment_methods : (s2.payment_details ? ['wire'] : []);
+      var chosen = keys.map(function (k) { return PAY[k]; }).filter(function (m) { return m && ('' + (m[1] || '')).trim(); });
+      if (chosen.length) doc.appendChild(h('div', { class: 'ld-note' }, [h('div', { class: 'ld-sumlabel', text: 'How to pay' })].concat(chosen.map(function (m) {
+        var v = '' + m[1];
+        var isUrl = /^https?:\/\//i.test(v.trim());
+        return h('p', { class: 'ld-payline' }, [h('b', { text: m[0] + ':  ' }), isUrl ? h('a', { href: v.trim(), target: '_blank', rel: 'noopener', class: 'ld-paylink', text: v.trim() }) : v]);
+      }))));
+    }
     if (inv.notes) doc.appendChild(h('div', { class: 'ld-note' }, [h('div', { class: 'ld-sumlabel', text: 'From your specialist' }), h('p', { text: inv.notes })]));
     doc.appendChild(h('p', { class: 'ld-terms', text: (state.settings && state.settings.invoice_terms) || 'Fares and availability are confirmed at time of ticketing. Cancellation and change terms vary by fare and supplier; ask your agent for the rules that apply to this booking.' }));
     doc.appendChild(ldFooter(inv.invoice_number));

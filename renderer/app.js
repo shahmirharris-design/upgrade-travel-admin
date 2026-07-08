@@ -1059,8 +1059,14 @@
         h('label', { class: 'inv-field' }, [h('span', { text: 'Address' }), h('textarea', { id: 'set-address', class: 'inv-input inv-textarea', rows: '2', value: s.agency_address || '' })])
       ]),
       h('div', { class: 'inv-section' }, [
+        h('h3', { class: 'inv-h3', text: 'Getting paid' }),
+        h('p', { class: 'inv-sublabel', style: 'margin:-2px 0 14px', text: 'Fill in every way you accept payment. On each invoice you pick which of these the customer sees.' }),
+        h('label', { class: 'inv-field' }, [h('span', { text: 'Wire / bank transfer details' }), h('textarea', { id: 'set-payment', class: 'inv-input inv-textarea', rows: '3', placeholder: 'Bank name, account name, routing and account numbers, SWIFT…', value: s.payment_details || '' })]),
+        h('div', { class: 'inv-row2' }, [invField('Stripe payment link', 'set-pay-stripe', 'text', 'https://buy.stripe.com/…', s.pay_stripe), invField('PayPal (link or email)', 'set-pay-paypal', 'text', 'paypal.me/… or you@email.com', s.pay_paypal)]),
+        h('div', { class: 'inv-row2' }, [invField('Zelle (email or phone)', 'set-pay-zelle', 'text', '', s.pay_zelle), h('div')])
+      ]),
+      h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'Invoicing & terms' }),
-        h('label', { class: 'inv-field' }, [h('span', { text: 'Payment details (shown on invoices)' }), h('textarea', { id: 'set-payment', class: 'inv-input inv-textarea', rows: '3', placeholder: 'Wire / bank details, payment instructions…', value: s.payment_details || '' })]),
         h('label', { class: 'inv-field' }, [h('span', { text: 'Invoice terms' }), h('textarea', { id: 'set-invterms', class: 'inv-input inv-textarea', rows: '2', placeholder: 'Leave blank to use the default wording.', value: s.invoice_terms || '' })]),
         h('label', { class: 'inv-field' }, [h('span', { text: 'Quote terms' }), h('textarea', { id: 'set-qterms', class: 'inv-input inv-textarea', rows: '2', placeholder: 'Leave blank to use the default wording.', value: s.quote_terms || '' })])
       ]),
@@ -1093,7 +1099,7 @@
     var payload = {
       id: 1,
       agency_name: val('set-name') || null, agency_tagline: val('set-tagline') || null, agency_phone: val('set-phone') || null, agency_email: val('set-email') || null, agency_address: val('set-address') || null,
-      payment_details: val('set-payment') || null, invoice_terms: val('set-invterms') || null, quote_terms: val('set-qterms') || null,
+      payment_details: val('set-payment') || null, pay_stripe: val('set-pay-stripe') || null, pay_paypal: val('set-pay-paypal') || null, pay_zelle: val('set-pay-zelle') || null, invoice_terms: val('set-invterms') || null, quote_terms: val('set-qterms') || null,
       default_currency: val('set-currency') || 'USD', default_cabin: val('set-cabin') || 'Business Class',
       quote_validity_days: parseInt(val('set-validity'), 10) || 14, deposit_pct: parseFloat(val('set-deposit')) || 0,
       updated_at: new Date().toISOString()
@@ -1815,7 +1821,7 @@
   function editInvoice(inv, netCost) {
     state.docCustomer = findCustomerForDoc(inv);
     state.builderTab = 'invoice'; state.docKind = 'invoice';
-    state.docDraft = { editing_id: inv.id, editing_number: inv.invoice_number, title: inv.title || '', destination: inv.destination || '', trip_type: inv.trip_type || null, segments: inv.segments || [], pax_adults: inv.pax_adults != null ? inv.pax_adults : 1, pax_children: inv.pax_children || 0, pax_infants: inv.pax_infants || 0, booking_reference: inv.booking_reference || '', line_items: inv.line_items || [], currency: inv.currency || 'USD', comparable_total: inv.comparable_total || null, deposit_paid: inv.deposit_paid || null, due_date: inv.due_date || null, net_cost: netCost != null ? netCost : null, notes: inv.notes || '' };
+    state.docDraft = { editing_id: inv.id, editing_number: inv.invoice_number, title: inv.title || '', destination: inv.destination || '', trip_type: inv.trip_type || null, segments: inv.segments || [], pax_adults: inv.pax_adults != null ? inv.pax_adults : 1, pax_children: inv.pax_children || 0, pax_infants: inv.pax_infants || 0, booking_reference: inv.booking_reference || '', line_items: inv.line_items || [], currency: inv.currency || 'USD', comparable_total: inv.comparable_total || null, deposit_paid: inv.deposit_paid || null, due_date: inv.due_date || null, net_cost: netCost != null ? netCost : null, payment_methods: inv.payment_methods || null, notes: inv.notes || '' };
     state.docFlash = { kind: 'note', text: 'Editing ' + (inv.invoice_number || 'this invoice') + '. Make your changes, then review & resend — it updates the same invoice. Recorded payments are kept.' };
     state.docView = 'form'; state.tab = 'invoices'; refreshNav(); renderTab();
   }
@@ -2481,6 +2487,13 @@
         h('h3', { class: 'inv-h3', text: 'Pricing & savings' }),
         h('div', { class: 'inv-row2' }, [h('label', { class: 'inv-field' }, [h('span', { text: 'Currency' }), currencySelect(d.currency)]), invField('Comparable price (booked elsewhere)', 'inv-comp', 'number', '0.00', d.comparable_total)]),
         pricingRow2,
+        (state.docKind === 'invoice' && payMethodDefs().length) ? h('div', { class: 'inv-field', style: 'margin-top:16px' }, [
+          h('span', { text: 'Payment options shown on this invoice' }),
+          h('div', { class: 'payopt-list' }, payMethodDefs().map(function (m) {
+            var on = d.payment_methods ? d.payment_methods.indexOf(m[0]) > -1 : true;
+            return h('label', { class: 'payopt' }, [h('input', { type: 'checkbox', class: 'payopt-cb', value: m[0], checked: on ? '' : null }), h('span', { text: m[1] })]);
+          }))
+        ]) : null,
         costRow,
         h('div', { class: 'inv-totals' }, [totalRow('Total', 'inv-t-charged'), totalRow('Comparable', 'inv-t-comp'), totalRow('You saved', 'inv-t-saved', true)])
       ]),
@@ -2539,6 +2552,16 @@
     });
     return out;
   }
+  /* the ways dad can get paid, from Settings; only configured ones are offerable */
+  function payMethodDefs() {
+    var st = state.settings || {};
+    return [
+      ['wire', 'Wire / bank transfer', st.payment_details],
+      ['stripe', 'Card (Stripe link)', st.pay_stripe],
+      ['paypal', 'PayPal', st.pay_paypal],
+      ['zelle', 'Zelle', st.pay_zelle]
+    ].filter(function (m) { return ('' + (m[2] || '')).trim(); });
+  }
   function collectDraft() {
     var items = [];
     Array.prototype.forEach.call(document.querySelectorAll('#inv-lines .inv-line'), function (r) {
@@ -2550,7 +2573,7 @@
     var pa = parseInt(val('inv-adults'), 10); if (isNaN(pa)) pa = 0;
     var pc = parseInt(val('inv-children'), 10) || 0, pi = parseInt(val('inv-infants'), 10) || 0;
     var dest = segs.length ? (segs[0].to.city + ', ' + segs[0].to.country) : null;
-    return { customer: state.docCustomer, request_id: state.docDraft && state.docDraft.request_id || null, source_quote_id: state.docDraft && state.docDraft.source_quote_id || null, editing_id: state.docDraft && state.docDraft.editing_id || null, editing_number: state.docDraft && state.docDraft.editing_number || null, title: val('inv-title'), destination: dest, trip_type: tripType, segments: segs, pax_adults: pa, pax_children: pc, pax_infants: pi, passengers: (pa + pc + pi) || 1, booking_reference: val('inv-ref'), line_items: items, currency: val('inv-cur') || 'USD', comparable_total: parseFloat(val('inv-comp')) || null, deposit_paid: parseFloat(val('inv-deposit')) || null, net_cost: parseFloat(val('inv-cost')) || null, due_date: val('inv-due') || null, valid_until: val('inv-valid') || null, options: readQuoteOptions(), notes: val('inv-notes') };
+    return { customer: state.docCustomer, request_id: state.docDraft && state.docDraft.request_id || null, source_quote_id: state.docDraft && state.docDraft.source_quote_id || null, editing_id: state.docDraft && state.docDraft.editing_id || null, editing_number: state.docDraft && state.docDraft.editing_number || null, title: val('inv-title'), destination: dest, trip_type: tripType, segments: segs, pax_adults: pa, pax_children: pc, pax_infants: pi, passengers: (pa + pc + pi) || 1, booking_reference: val('inv-ref'), line_items: items, currency: val('inv-cur') || 'USD', comparable_total: parseFloat(val('inv-comp')) || null, deposit_paid: parseFloat(val('inv-deposit')) || null, net_cost: parseFloat(val('inv-cost')) || null, due_date: val('inv-due') || null, valid_until: val('inv-valid') || null, options: readQuoteOptions(), payment_methods: state.docKind === 'invoice' ? Array.prototype.map.call(document.querySelectorAll('.payopt-cb:checked'), function (el) { return el.value; }) : undefined, notes: val('inv-notes') };
   }
   /* a "round trip" with only one filled flight would silently send as a one-way — stop it */
   function roundTripGap(d) { return d.trip_type === 'round' && (d.segments || []).length === 1; }
@@ -2599,7 +2622,11 @@
       docEl.appendChild(h('div', { class: 'rev-savings' }, [h('div', { class: 'rev-savings-k', text: 'Comparable price booked elsewhere ' + money(d.comparable_total, cur) }), h('div', { class: 'rev-savings-big' }, [h('span', { text: 'You saved ' }), h('b', { text: money(d.comparable_total - total, cur) })])]));
     }
     if (d.notes) docEl.appendChild(h('div', { class: 'rev-notes' }, [h('h4', { class: 'rev-h4', text: 'Notes' }), h('p', { text: d.notes })]));
-    if (kind === 'invoice' && state.settings && state.settings.payment_details) docEl.appendChild(h('div', { class: 'rev-notes' }, [h('h4', { class: 'rev-h4', text: 'Payment' }), h('p', { text: state.settings.payment_details })]));
+    if (kind === 'invoice') {
+      var defs = payMethodDefs();
+      var chosen = defs.filter(function (m) { return !d.payment_methods || d.payment_methods.indexOf(m[0]) > -1; });
+      if (chosen.length) docEl.appendChild(h('div', { class: 'rev-notes' }, [h('h4', { class: 'rev-h4', text: 'Payment options the customer will see' })].concat(chosen.map(function (m) { return h('p', null, [h('b', { text: m[1] + ':  ' }), '' + m[2]]); }))));
+    }
     var setT = state.settings || {};
     var terms = kind === 'quote'
       ? (setT.quote_terms || ('This quote is an estimate' + (d.valid_until ? ', valid until ' + fmtDate(d.valid_until) : '') + '. Fares and availability are confirmed at the time of ticketing and may change until then.'))
@@ -2615,7 +2642,7 @@
     var editing = (state.docKind === 'quote' || state.docKind === 'invoice') && d.editing_id;
     if (state.docKind === 'invoice') {
       var dep = Math.min(Math.max(d.deposit_paid || 0, 0), total);
-      payload.deposit_paid = dep || null; payload.due_date = d.due_date || null;
+      payload.deposit_paid = dep || null; payload.due_date = d.due_date || null; payload.payment_methods = (d.payment_methods && d.payment_methods.length) ? d.payment_methods : null;
       /* on an EDIT, recorded payments stay as they are — only fresh invoices start at the deposit */
       if (!editing) { payload.amount_paid = dep; if (total > 0 && dep >= total - 0.001) payload.paid_at = new Date().toISOString(); }
     }

@@ -1995,3 +1995,8 @@ p, .ld-prose, .bv-day-text, .quote-note{ text-wrap: pretty; }
 .ld-dest{ margin:14px 0 0; font-family:'Cormorant Garamond',Georgia,serif; font-style:italic; font-size:21px; color:#7A5E29; }
 .ld-footer-brand{ display:flex; align-items:center; gap:10px; }
 .ld-footer .ld-mark, .ld-footer-brand .ld-mark{ width:9px; height:9px; }
+
+/* invoice: how to pay */
+.ld-payline{ margin:6px 0 0; font-size:14px; color:#211B12; }
+.ld-payline b{ color:#7A5E29; font-weight:600; }
+.ld-paylink{ color:#6B4F1D; text-decoration:underline; text-underline-offset:2px; word-break:break-all; }
