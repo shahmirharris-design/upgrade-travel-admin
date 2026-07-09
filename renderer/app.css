@@ -912,3 +912,19 @@ input{ font-family:inherit; }
 .empty-s{ font-size:13px; color:var(--stone); max-width:44ch; line-height:1.55; }
 .payopt-none{ font-size:13px; color:var(--stone); }
 .payopt-go{ border:0; background:none; padding:0; font-size:13px; font-weight:600; color:#7A5E29; cursor:pointer; text-decoration:underline; text-underline-offset:2px; }
+
+/* customer-attached drafts: resume bar (builder) + customer-detail list */
+.drafts-bar{ background:rgba(169,133,76,.07); border:1px solid rgba(169,133,76,.3); border-radius:12px; padding:12px 16px; margin-bottom:16px; }
+.drafts-bar-h{ font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:#7A5E29; font-weight:600; margin-bottom:8px; }
+.drafts-row{ display:flex; align-items:center; gap:10px; padding:7px 0; border-top:1px solid rgba(169,133,76,.18); }
+.drafts-row:first-of-type{ border-top:0; }
+.drafts-row-main{ display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
+.drafts-row-main b{ font-size:13.5px; color:var(--ink); }
+.drafts-row-sub{ font-size:12px; color:var(--stone); }
+.drafts-del{ border:0; background:none; color:var(--stone); font-size:18px; line-height:1; cursor:pointer; padding:0 4px; }
+.drafts-del:hover{ color:#a3402f; }
+.cd-draft-row{ display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); }
+.cd-draft-row:last-of-type{ border-bottom:0; }
+.cd-draft-kind{ flex:none; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:#7A5E29; font-weight:600; width:64px; }
+.cd-draft-main{ display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
+.cd-draft-main b{ font-size:13.5px; color:var(--ink); }

@@ -959,16 +959,17 @@
       group('Emergency contact', [kv('Name', p.emergency_contact_name), kv('Phone', p.emergency_contact_phone), kv('Relationship', rel)]),
       h('div', { id: 'cd-bookings', class: 'cd-group' }, [h('h4', { text: 'Past trips & savings ledger' }), h('div', { class: 'cd-hist-loading', text: 'Loading…' })]),
       h('div', { id: 'cd-crm', class: 'cd-group cd-crm' }, [h('h4', { text: 'Concierge notes' }), h('div', { class: 'cd-hist-loading', text: 'Loading notes…' })]),
+      h('div', { id: 'cd-drafts', class: 'cd-group' }, [h('h4', { text: 'Saved drafts' }), h('div', { class: 'cd-hist-loading', text: 'Loading…' })]),
       h('div', { id: 'cd-history', class: 'cd-group cd-history' }, [h('h4', { text: 'History' }), h('div', { class: 'cd-hist-loading', text: 'Loading…' })]),
       h('div', { class: 'cd-actions' }, [
-        h('button', { class: 'btn btn-primary', style: 'width:auto', onclick: function () { state.builderTab = 'quote'; state.docKind = 'quote'; state.docView = 'form'; state.docDraft = null; state.docCustomer = p; state.tab = 'quotes'; refreshNav(); renderTab(); }, text: 'New quote' }),
-        h('button', { class: 'btn btn-ghost', onclick: function () { state.builderTab = 'invoice'; state.docKind = 'invoice'; state.docView = 'form'; state.docDraft = null; state.docCustomer = p; state.tab = 'invoices'; refreshNav(); renderTab(); }, text: 'New invoice' }),
-        h('button', { class: 'btn btn-ghost', onclick: function () { state.builderTab = 'itinerary'; state.itinView = 'form'; state.itinDraft = null; state.docCustomer = p; state.tab = 'itineraries'; refreshNav(); renderTab(); }, text: 'New itinerary' }),
+        h('button', { class: 'btn btn-primary', style: 'width:auto', onclick: function () { state.builderTab = 'quote'; state.docKind = 'quote'; state.docView = 'form'; state.docDraft = null; state.draftId = null; state.docCustomer = p; state.tab = 'quotes'; refreshNav(); renderTab(); }, text: 'New quote' }),
+        h('button', { class: 'btn btn-ghost', onclick: function () { state.builderTab = 'invoice'; state.docKind = 'invoice'; state.docView = 'form'; state.docDraft = null; state.draftId = null; state.docCustomer = p; state.tab = 'invoices'; refreshNav(); renderTab(); }, text: 'New invoice' }),
+        h('button', { class: 'btn btn-ghost', onclick: function () { state.builderTab = 'itinerary'; state.itinView = 'form'; state.itinDraft = null; state.draftId = null; state.docCustomer = p; state.tab = 'itineraries'; refreshNav(); renderTab(); }, text: 'New itinerary' }),
         h('button', { class: 'btn btn-ghost', onclick: function (e) { addReminderInline(p, e.target); }, text: '+ Reminder' })
       ])
     ]);
     right.appendChild(card);
-    setTimeout(function () { loadCustomerHistory(p); loadCustomerCRM(p); loadCustBookings(p); }, 0);
+    setTimeout(function () { loadCustomerHistory(p); loadCustomerCRM(p); loadCustBookings(p); loadCustDrafts(p); }, 0);
   }
   /* the legacy savings ledger: trips from before the app era, so lifetime savings are honest */
   async function loadCustBookings(p) {
@@ -1809,7 +1810,7 @@
       if (!ms.length) { menu.appendChild(h('div', { class: 'cs-opt cs-none', text: 'No matches' })); menu.style.display = 'block'; return; }
       ms.forEach(function (c) {
         var opt = h('div', { class: 'cs-opt' }, [avatarBox(c, 'cust-av'), h('div', { class: 'cust-row-meta' }, [h('div', { class: 'cust-row-name', text: fullName(c) }), h('div', { class: 'cust-row-sub', text: (c.email || '') + (c.account_number ? '  ·  #' + c.account_number : '') })])]);
-        opt.addEventListener('mousedown', function (e) { e.preventDefault(); state.docCustomer = c; input.value = ''; menu.style.display = 'none'; renderResolved(c); if (loadDraft(draftKind(), c.id)) renderTab(); else afterCustomerSelected(c); });
+        opt.addEventListener('mousedown', function (e) { e.preventDefault(); state.docCustomer = c; state.draftId = null; input.value = ''; menu.style.display = 'none'; renderResolved(c); renderTab(); afterCustomerSelected(c); });
         menu.appendChild(opt);
       });
       menu.style.display = 'block';
@@ -1828,53 +1829,120 @@
     quote: { table: 'quotes', numKey: 'quote_number', head: 'QUOTE', send: 'Send quote', title: 'New quote', sub: 'Quote a customer for a trip — they can accept it in their account.', reviewTitle: 'Review quote', flashWord: 'Quote', billLabel: 'Prepared for' }
   };
   function dcfg() { return DOC[state.docKind] || DOC.invoice; }
-  function enterBuilder(b) { if (state.builderTab === b) return; state.builderTab = b; state.docCustomer = null; state.docDraft = null; state.docView = 'form'; state.docFlash = null; state.itinDraft = null; state.itinView = 'form'; }
+  function enterBuilder(b) { if (state.builderTab === b) return; state.builderTab = b; state.docCustomer = null; state.docDraft = null; state.docView = 'form'; state.docFlash = null; state.itinDraft = null; state.itinView = 'form'; state.draftId = null; }
   function enterDoc(kind) { state.docKind = kind; enterBuilder(kind); }
-  /* ---------- per-customer auto-save drafts (localStorage — survives a crash or closing the app) ---------- */
+  /* ---------- per-customer auto-save drafts (Supabase; multiple per customer, cross-device) ---------- */
   function draftKind() { return state.builderTab === 'itinerary' ? 'itinerary' : state.docKind; }
-  function draftKey(kind, id) { return 'ut_draft_' + kind + '_' + id; }
   function draftHasContent(d) {
     if (!d) return false;
     var seg = (d.segments || []).some(function (s) { return s && (s.from || s.to || s.airline || s.flight_number); });
     var li = (d.line_items || []).some(function (i) { return i && (i.label || i.detail || i.amount); });
     return !!(d.title || d.destination || d.notes || d.booking_reference || d.comparable_total || d.total_charged || seg || li || (d.hotels && d.hotels.length) || (d.transport && d.transport.length) || (d.entertainment && d.entertainment.length) || (d.cruises && d.cruises.length) || (d.day_notes && d.day_notes.length) || (d.documents && d.documents.length));
   }
-  function saveDraft() {
-    try {
-      if (!state.docCustomer || !state.docCustomer.id) return;
-      var isItin = state.builderTab === 'itinerary';
-      if (isItin ? state.itinView !== 'form' : state.docView !== 'form') return;
-      if (!document.getElementById(isItin ? 'itin-title' : 'inv-title')) return;
-      var d = isItin ? collectItin() : collectDraft();
-      var kind = draftKind(), key = draftKey(kind, state.docCustomer.id);
-      if (!draftHasContent(d)) { localStorage.removeItem(key); return; }
-      var data = {}; Object.keys(d).forEach(function (k) { if (k !== 'customer') data[k] = d[k]; });
-      localStorage.setItem(key, JSON.stringify({ saved_at: Date.now(), kind: kind, data: data }));
-      var ind = document.getElementById('draft-ind'); if (ind) { ind.textContent = 'Draft saved'; ind.classList.add('is-on'); clearTimeout(saveDraft._t); saveDraft._t = setTimeout(function () { ind.classList.remove('is-on'); ind.textContent = 'Auto-saved for this customer'; }, 1800); }
-    } catch (e) {}
-  }
-  function loadDraft(kind, id) { try { var raw = localStorage.getItem(draftKey(kind, id)); if (!raw) return null; var o = JSON.parse(raw); return (o && o.data) ? o : null; } catch (e) { return null; } }
-  function clearDraft(kind, id) { try { localStorage.removeItem(draftKey(kind, id)); } catch (e) {} }
-  function draftWhen(ts) { var diff = (Date.now() - ts) / 60000; if (diff < 1) return 'just now'; if (diff < 60) return Math.round(diff) + ' min ago'; var d = new Date(ts); return fmtDate(d.toISOString()) + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2); }
-  function restoreDraftForCustomer() {
-    if (!state.docCustomer || !state.docCustomer.id) return false;
+  /* ---- customer-attached drafts (Supabase; multiple per customer, cross-device) ---- */
+  function currentDraftData() {
     var isItin = state.builderTab === 'itinerary';
-    if (isItin ? state.itinDraft : state.docDraft) return false;
-    var kind = draftKind(), saved = loadDraft(kind, state.docCustomer.id);
-    if (!saved || !draftHasContent(saved.data)) return false;
-    var msg = 'Picked up where you left off (saved ' + draftWhen(saved.saved_at) + ').';
-    if (isItin) { state.itinDraft = saved.data; state.itinFlash = { kind: 'note', text: msg, restore: true }; }
-    else { state.docDraft = saved.data; state.docFlash = { kind: 'note', text: msg, restore: true }; }
+    if (isItin ? state.itinView !== 'form' : state.docView !== 'form') return null;
+    if (!document.getElementById(isItin ? 'itin-title' : 'inv-title')) return null;
+    var d = isItin ? collectItin() : collectDraft();
+    var data = {}; Object.keys(d).forEach(function (k) { if (k !== 'customer') data[k] = d[k]; });
+    return data;
+  }
+  function draftLabel(d) { return (d && (d.title || d.destination)) || 'Untitled trip'; }
+  function draftSummary(d) {
+    d = d || {};
+    var segs = d.segments || [], f = segs[0] && segs[0].from && segs[0].from.city, t = segs[0] && segs[0].to && segs[0].to.city;
+    var route = (f && t) ? (f + ' → ' + t) : (d.destination || '');
+    var when = (d.start_date ? fmtDate(d.start_date) : '') || (d.valid_until ? ('valid ' + fmtDate(d.valid_until)) : '');
+    return [route, when].filter(Boolean).join('  ·  ');
+  }
+  function setDraftInd(text, on) {
+    var ind = document.getElementById('draft-ind'); if (!ind) return;
+    ind.textContent = text; ind.classList.toggle('is-on', !!on);
+  }
+  function draftIdleLabel() { return 'Auto-saving to ' + (state.docCustomer ? (fullName(state.docCustomer) || 'this customer') : 'this customer'); }
+  async function persistDraft(data, manual) {
+    if (!state.docCustomer || !state.docCustomer.id || !data) return false;
+    var kind = draftKind();
+    var row = { kind: kind, customer_email: state.docCustomer.email || null, customer_id: state.docCustomer.id || null, title: draftLabel(data), summary: draftSummary(data), payload: data, updated_at: new Date().toISOString() };
+    setDraftInd('Saving…', true);
+    var r;
+    if (state.draftId) r = await sb.from('drafts').update(row).eq('id', state.draftId).select('id').maybeSingle();
+    else { r = await sb.from('drafts').insert(row).select('id').maybeSingle(); if (r && r.data) state.draftId = r.data.id; }
+    if (!r || r.error) { setDraftInd('Could not save draft', false); return false; }
+    setDraftInd(manual ? 'Draft saved ✓' : 'Saved ✓  ·  attached to ' + (fullName(state.docCustomer) || 'customer'), true);
+    clearTimeout(setDraftInd._t); setDraftInd._t = setTimeout(function () { setDraftInd(draftIdleLabel(), false); }, 2200);
     return true;
   }
-  function startFresh(isItin) { if (state.docCustomer) clearDraft(draftKind(), state.docCustomer.id); if (isItin) state.itinDraft = null; else state.docDraft = null; renderTab(); }
-  function flashEl(flash, isItin) {
-    var el = h('div', { class: 'msg ' + flash.kind }, [h('span', { text: flash.text })]);
-    if (flash.restore) el.appendChild(h('button', { type: 'button', class: 'msg-action', onclick: function () { confirmDialog({ title: 'Start fresh', message: 'Throw away the saved draft and start over?', detail: 'Everything in the draft is lost.', danger: true, confirmText: 'Start fresh', onConfirm: function () { startFresh(isItin); } }); }, text: 'Start fresh instead' }));
-    return el;
+  function autoSaveDraft() {
+    try {
+      var data = currentDraftData();
+      if (!data || data.editing_id || !draftHasContent(data)) return; /* editing a sent doc has its own row */
+      persistDraft(data, false);
+    } catch (e) { }
   }
+  function saveDraftNow(btn) {
+    var data = currentDraftData();
+    if (!data || !draftHasContent(data)) { setDraftInd('Nothing to save yet', false); return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    persistDraft(data, true).then(function (ok) {
+      if (btn) { btn.disabled = false; btn.textContent = ok ? 'Saved ✓' : 'Save draft'; setTimeout(function () { if (btn) btn.textContent = 'Save draft'; }, 1800); }
+    });
+  }
+  function deleteDraftById(id) { if (!id) return Promise.resolve(); return sb.from('drafts').delete().eq('id', id).then(function () { }, function () { }); }
+  function clearCurrentDraft() { if (state.draftId) { deleteDraftById(state.draftId); state.draftId = null; } }
+  function resumeDraft(d) {
+    sb.from('drafts').select('*').eq('id', d.id).maybeSingle().then(function (r) {
+      var row = r && r.data; if (!row) return;
+      state.docCustomer = findCustomerForDoc({ customer_email: row.customer_email, user_id: row.customer_id });
+      state.draftId = row.id;
+      if (row.kind === 'itinerary') { state.builderTab = 'itinerary'; state.itinDraft = row.payload; state.itinView = 'form'; state.docKind = null; state.tab = 'itineraries'; }
+      else { state.builderTab = row.kind; state.docKind = row.kind; state.docDraft = row.payload; state.docView = 'form'; state.tab = (row.kind === 'invoice') ? 'invoices' : 'quotes'; }
+      refreshNav(); renderTab();
+    });
+  }
+  /* the "resume a saved draft" bar shown at the top of a builder for the current customer */
+  function draftsBar(kind) {
+    var host = h('div', { id: 'drafts-bar' });
+    if (state.docCustomer && state.docCustomer.id) setTimeout(function () { loadDraftsBar(kind); }, 0);
+    return host;
+  }
+  async function loadDraftsBar(kind) {
+    var host = document.getElementById('drafts-bar'); if (!host) return;
+    if (!state.docCustomer || !state.docCustomer.id) return;
+    var r = await sb.from('drafts').select('id, title, summary, kind, updated_at, customer_email, customer_id').eq('customer_id', state.docCustomer.id).eq('kind', kind).order('updated_at', { ascending: false });
+    host = document.getElementById('drafts-bar'); if (!host) return;
+    var rows = (r.data || []).filter(function (d) { return d.id !== state.draftId; });
+    host.textContent = '';
+    if (!rows.length) return;
+    var box = h('div', { class: 'drafts-bar' }, [h('div', { class: 'drafts-bar-h', text: rows.length + ' other saved draft' + (rows.length > 1 ? 's' : '') + ' for ' + (fullName(state.docCustomer) || 'this customer') })]);
+    rows.forEach(function (d) {
+      box.appendChild(h('div', { class: 'drafts-row' }, [
+        h('div', { class: 'drafts-row-main' }, [h('b', { text: d.title || 'Untitled trip' }), h('span', { class: 'drafts-row-sub', text: [d.summary, 'saved ' + fmtDate(d.updated_at)].filter(Boolean).join('  ·  ') })]),
+        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:6px 12px', onclick: function () { resumeDraft(d); }, text: 'Resume' }),
+        h('button', { type: 'button', class: 'drafts-del', title: 'Delete draft', onclick: function () { confirmDialog({ title: 'Delete draft', message: 'Delete the saved draft “' + (d.title || 'Untitled trip') + '”?', detail: 'It is removed for good.', danger: true, confirmText: 'Delete', onConfirm: function () { deleteDraftById(d.id).then(function () { loadDraftsBar(kind); }); } }); }, text: '×' })
+      ]));
+    });
+    host.appendChild(box);
+  }
+  async function loadCustDrafts(p) {
+    var box = document.getElementById('cd-drafts'); if (!box) return;
+    var r = await sb.from('drafts').select('id, kind, title, summary, updated_at, customer_email, customer_id').eq('customer_id', p.id).order('updated_at', { ascending: false });
+    box = document.getElementById('cd-drafts'); if (!box) return;
+    var rows = r.data || []; box.textContent = ''; box.appendChild(h('h4', { text: 'Saved drafts' }));
+    if (!rows.length) { box.appendChild(h('p', { class: 'cd-book-none', text: 'No drafts in progress.' })); return; }
+    rows.forEach(function (d) {
+      box.appendChild(h('div', { class: 'cd-draft-row' }, [
+        h('span', { class: 'cd-draft-kind', text: cap(d.kind) }),
+        h('div', { class: 'cd-draft-main' }, [h('b', { text: d.title || 'Untitled trip' }), h('span', { class: 'cd-book-sub', text: [d.summary, 'saved ' + fmtDate(d.updated_at)].filter(Boolean).join('  ·  ') })]),
+        h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto; padding:6px 12px', onclick: function () { resumeDraft(d); }, text: 'Resume' }),
+        h('button', { type: 'button', class: 'cd-book-del', title: 'Delete draft', onclick: function () { confirmDialog({ title: 'Delete draft', message: 'Delete the saved draft “' + (d.title || 'Untitled trip') + '”?', detail: 'It is removed for good.', danger: true, confirmText: 'Delete', onConfirm: function () { deleteDraftById(d.id).then(function () { loadCustDrafts(p); }); } }); }, text: '×' })
+      ]));
+    });
+  }
+  function flashEl(flash) { return h('div', { class: 'msg ' + flash.kind }, [h('span', { text: flash.text })]); }
   var _saveT = null;
-  function scheduleSave() { if (!state.docCustomer) return; if (['invoices', 'quotes', 'itineraries'].indexOf(state.tab) < 0) return; clearTimeout(_saveT); _saveT = setTimeout(saveDraft, 900); }
+  function scheduleSave() { if (!state.docCustomer || !state.docCustomer.id) return; if (['invoices', 'quotes', 'itineraries'].indexOf(state.tab) < 0) return; clearTimeout(_saveT); _saveT = setTimeout(autoSaveDraft, 1200); }
   document.addEventListener('input', scheduleSave);
   document.addEventListener('change', scheduleSave);
   function tabInvoices() {
@@ -1995,7 +2063,7 @@
   function editInvoice(inv, netCost) {
     state.docCustomer = findCustomerForDoc(inv);
     state.builderTab = 'invoice'; state.docKind = 'invoice';
-    state.docDraft = { editing_id: inv.id, editing_number: inv.invoice_number, title: inv.title || '', destination: inv.destination || '', trip_type: inv.trip_type || null, segments: inv.segments || [], pax_adults: inv.pax_adults != null ? inv.pax_adults : 1, pax_children: inv.pax_children || 0, pax_infants: inv.pax_infants || 0, booking_reference: inv.booking_reference || '', line_items: inv.line_items || [], currency: inv.currency || 'USD', comparable_total: inv.comparable_total || null, deposit_paid: inv.deposit_paid || null, due_date: inv.due_date || null, net_cost: netCost != null ? netCost : null, payment_methods: inv.payment_methods || null, notes: inv.notes || '' };
+    state.draftId = null; state.docDraft = { editing_id: inv.id, editing_number: inv.invoice_number, title: inv.title || '', destination: inv.destination || '', trip_type: inv.trip_type || null, segments: inv.segments || [], pax_adults: inv.pax_adults != null ? inv.pax_adults : 1, pax_children: inv.pax_children || 0, pax_infants: inv.pax_infants || 0, booking_reference: inv.booking_reference || '', line_items: inv.line_items || [], currency: inv.currency || 'USD', comparable_total: inv.comparable_total || null, deposit_paid: inv.deposit_paid || null, due_date: inv.due_date || null, net_cost: netCost != null ? netCost : null, payment_methods: inv.payment_methods || null, notes: inv.notes || '' };
     state.docFlash = { kind: 'note', text: 'Editing ' + (inv.invoice_number || 'this invoice') + '. Make your changes, then review & resend — it updates the same invoice. Recorded payments are kept.' };
     state.docView = 'form'; state.tab = 'invoices'; refreshNav(); renderTab();
   }
@@ -2116,7 +2184,7 @@
   function editQuote(q) {
     state.docCustomer = findCustomerForDoc(q);
     state.builderTab = 'quote'; state.docKind = 'quote';
-    state.docDraft = { editing_id: q.id, editing_number: q.quote_number, title: q.title || '', destination: q.destination || '', trip_type: q.trip_type || null, segments: q.segments || [], pax_adults: q.pax_adults != null ? q.pax_adults : 1, pax_children: q.pax_children || 0, pax_infants: q.pax_infants || 0, booking_reference: q.booking_reference || '', line_items: q.line_items || [], currency: q.currency || 'USD', comparable_total: q.comparable_total || null, valid_until: q.valid_until || null, options: q.options || [], notes: q.notes || '' };
+    state.draftId = null; state.docDraft = { editing_id: q.id, editing_number: q.quote_number, title: q.title || '', destination: q.destination || '', trip_type: q.trip_type || null, segments: q.segments || [], pax_adults: q.pax_adults != null ? q.pax_adults : 1, pax_children: q.pax_children || 0, pax_infants: q.pax_infants || 0, booking_reference: q.booking_reference || '', line_items: q.line_items || [], currency: q.currency || 'USD', comparable_total: q.comparable_total || null, valid_until: q.valid_until || null, options: q.options || [], notes: q.notes || '' };
     state.docFlash = { kind: 'note', text: 'Editing ' + (q.quote_number || 'this quote') + '. Make your changes, then review & resend — it updates the same quote.' };
     state.docView = 'form'; state.tab = 'quotes'; refreshNav(); renderTab();
   }
@@ -2167,6 +2235,7 @@
     state.docCustomer = findCustomerForDoc(q);
     state.builderTab = 'quote'; state.docKind = 'quote';
     state.docDraft = { title: q.title || '', destination: q.destination || '', trip_type: q.trip_type || null, segments: q.segments || [], pax_adults: q.pax_adults != null ? q.pax_adults : 1, pax_children: q.pax_children || 0, pax_infants: q.pax_infants || 0, booking_reference: q.booking_reference || '', line_items: q.line_items || [], currency: q.currency || 'USD', comparable_total: q.comparable_total || null, valid_until: null, options: q.options || [], notes: q.notes || '' };
+    state.draftId = null;
     state.docFlash = { kind: 'note', text: 'Duplicated from ' + (q.quote_number || 'the quote') + '. Adjust anything, then send as a new quote.' };
     state.docView = 'form'; state.tab = 'quotes'; refreshNav(); renderTab();
   }
@@ -2591,17 +2660,17 @@
       var isInv = c.head === 'INVOICE';
       wrap.appendChild(mainHead(isInv ? 'Invoices' : 'Quotes', isInv ? 'View or edit any invoice you’ve sent.' : 'View or edit any quote you’ve sent.'));
       var lb = h('div', { class: 'main-body' });
-      lb.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-bottom:14px', onclick: function () { state.docView = 'form'; renderTab(); }, text: isInv ? '← New invoice' : '← New quote' }));
+      lb.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-bottom:14px', onclick: function () { state.docView = 'form'; state.docDraft = null; state.draftId = null; renderTab(); }, text: isInv ? '← New invoice' : '← New quote' }));
       var dsearch = h('input', { class: 'inv-input list-search', type: 'text', placeholder: isInv ? 'Search invoices by customer, number or route…' : 'Search quotes by customer, number or route…', autocomplete: 'off', value: (isInv ? state.invSearch : state.qSearch) || '' });
       dsearch.addEventListener('input', function () { if (isInv) { state.invSearch = dsearch.value; renderInvoiceList(); } else { state.qSearch = dsearch.value; renderSentQuotes(); } });
       lb.appendChild(dsearch);
       lb.appendChild(h('div', { id: isInv ? 'invlist-box' : 'sentq-box' }, [h('div', { class: 'dash-loading', text: isInv ? 'Loading invoices…' : 'Loading quotes…' })]));
       wrap.appendChild(lb); setTimeout(isInv ? loadInvoiceList : loadSentQuotes, 0); return wrap;
     }
-    restoreDraftForCustomer();
     wrap.appendChild(mainHead(c.title, c.sub));
     var body = h('div', { class: 'main-body' });
-    if (state.docFlash) { body.appendChild(flashEl(state.docFlash, false)); state.docFlash = null; }
+    if (state.docFlash) { body.appendChild(flashEl(state.docFlash)); state.docFlash = null; }
+    body.appendChild(draftsBar(state.docKind));
     body.appendChild(docForm(state.docDraft));
     wrap.appendChild(body); return wrap;
   }
@@ -2678,7 +2747,7 @@
       ]),
       state.docKind === 'quote' ? quoteOptionsSection(d.options) : null,
       h('div', { class: 'inv-section' }, [h('h3', { class: 'inv-h3', text: 'Notes (optional)' }), h('textarea', { id: 'inv-notes', class: 'inv-input inv-textarea', rows: '2', placeholder: 'Anything the customer should know.', value: d.notes || '' })]),
-      h('div', { class: 'inv-submit' }, [h('span', { id: 'draft-ind', class: 'draft-ind', text: 'Auto-saved for this customer' }), h('div', { id: 'inv-msg', class: 'msg', style: 'display:none' }), h('button', { type: 'submit', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Create & review' })])
+      h('div', { class: 'inv-submit' }, [h('span', { id: 'draft-ind', class: 'draft-ind', text: 'Auto-saving to this customer' }), h('div', { id: 'inv-msg', class: 'msg', style: 'display:none' }), h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto', onclick: function (e) { saveDraftNow(e.target); }, text: 'Save draft' }), h('button', { type: 'submit', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Create & review' })])
     ]);
     setTimeout(function () { if (state.docCustomer) renderResolved(state.docCustomer); recalc(); loadTemplates(); applyTripType(detectTripType(d)); }, 0);
     return form;
@@ -2837,7 +2906,7 @@
     if (state.docKind === 'invoice' && d.source_quote_id) { sb.from('quotes').update({ status: 'accepted' }).eq('id', d.source_quote_id).then(function () {}).catch(function (e) { console.warn('mark quote accepted failed', e); }); }
     var num = (r.data && r.data[c.numKey]) ? r.data[c.numKey] : (d.editing_number || '');
     state.docFlash = { kind: 'ok', text: editing ? (c.flashWord + ' ' + num + ' updated & resent to ' + fullName(d.customer) + '.') : (c.flashWord + ' ' + num + ' sent to ' + fullName(d.customer) + '. It is now in their account.') };
-    if (d.customer && d.customer.id) clearDraft(state.docKind, d.customer.id);
+    clearCurrentDraft();
     state.docCustomer = null; state.docDraft = null; state.docView = 'form'; renderTab();
   }
 
@@ -3176,19 +3245,19 @@
     if (state.itinView === 'list') {
       wrap.appendChild(mainHead('Sent itineraries', 'View or edit any itinerary you’ve sent.'));
       var lb = h('div', { class: 'main-body' });
-      lb.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-bottom:14px', onclick: function () { state.itinView = 'form'; renderTab(); }, text: '← New itinerary' }));
+      lb.appendChild(h('button', { class: 'btn btn-ghost', style: 'width:auto; margin-bottom:14px', onclick: function () { state.itinView = 'form'; state.itinDraft = null; state.draftId = null; renderTab(); }, text: '← New itinerary' }));
       var isearch = h('input', { class: 'inv-input list-search', type: 'text', placeholder: 'Search itineraries by customer, number or destination…', autocomplete: 'off', value: state.itSearch || '' });
       isearch.addEventListener('input', function () { state.itSearch = isearch.value; renderItinList(); });
       lb.appendChild(isearch);
       lb.appendChild(h('div', { id: 'sentitin-list' }, [h('div', { class: 'dash-loading', text: 'Loading itineraries…' })]));
       wrap.appendChild(lb); setTimeout(loadSentItins, 0); return wrap;
     }
-    restoreDraftForCustomer();
     var editing = !!(state.itinDraft && state.itinDraft.editing_id);
     wrap.appendChild(mainHead(editing ? 'Edit itinerary' : 'New itinerary', editing ? 'Update the trip — it replaces the version in their account.' : 'Build the trip — flights, hotels, transport and experiences. It appears in their account.'));
     var body = h('div', { class: 'main-body' });
-    if (state.itinFlash) { body.appendChild(flashEl(state.itinFlash, true)); state.itinFlash = null; }
+    if (state.itinFlash) { body.appendChild(flashEl(state.itinFlash)); state.itinFlash = null; }
     body.appendChild(sentItinsBar());
+    body.appendChild(draftsBar('itinerary'));
     body.appendChild(itinForm(state.itinDraft));
     wrap.appendChild(body); return wrap;
   }
@@ -3226,6 +3295,7 @@
     state.docCustomer = findCustomerForDoc(row);
     state.builderTab = 'itinerary';
     state.itinDraft = { title: row.title || '', destination: row.destination || '', trip_type: row.trip_type || null, start_date: row.start_date || null, end_date: row.end_date || null, pax_adults: row.pax_adults != null ? row.pax_adults : 1, pax_children: row.pax_children || 0, pax_infants: row.pax_infants || 0, traveler_names: row.traveler_names || '', segments: row.segments || [], hotels: row.hotels || [], transport: row.transport || [], entertainment: row.entertainment || [], cruises: row.cruises || [], day_notes: row.day_notes || [], documents: row.documents || [], notes: row.notes || '', total_charged: row.total_charged || null, comparable_total: row.comparable_total || null, currency: row.currency || 'USD', price_invoice_number: row.price_invoice_number || null, city_images: row.city_images || null };
+    state.draftId = null;
     state.itinFlash = { kind: 'note', text: 'Duplicated from ' + (row.itinerary_number || 'the itinerary') + '. Change the customer or details, then send as a new itinerary.' };
     state.itinView = 'form'; state.tab = 'itineraries'; refreshNav(); renderTab();
   }
@@ -3334,7 +3404,7 @@
         h('input', { type: 'hidden', id: 'itin-cur', value: d.currency || (state.settings && state.settings.default_currency) || 'USD' })
       ]),
       h('div', { class: 'inv-section' }, [h('h3', { class: 'inv-h3', text: 'Notes (optional)' }), h('textarea', { id: 'itin-notes', class: 'inv-input inv-textarea', rows: '2', placeholder: 'Anything the customer should know.', value: d.notes || '' })]),
-      h('div', { class: 'inv-submit' }, [h('span', { id: 'draft-ind', class: 'draft-ind', text: 'Auto-saved for this customer' }), h('div', { id: 'inv-msg', class: 'msg', style: 'display:none' }), h('button', { type: 'submit', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Create & review' })])
+      h('div', { class: 'inv-submit' }, [h('span', { id: 'draft-ind', class: 'draft-ind', text: 'Auto-saving to this customer' }), h('div', { id: 'inv-msg', class: 'msg', style: 'display:none' }), h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto', onclick: function (e) { saveDraftNow(e.target); }, text: 'Save draft' }), h('button', { type: 'submit', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Create & review' })])
     ]);
     setTimeout(function () { if (state.docCustomer) renderResolved(state.docCustomer); loadTemplates(); applyTripType(detectTripType(d)); initDatePickers(form); }, 0);
     return form;
@@ -3529,7 +3599,7 @@
     else r = await sb.from('itineraries').insert(payload).select().maybeSingle();
     btn.disabled = false; btn.textContent = 'Send to customer';
     if (r.error) { showInvMsg(msg, r.error.message || 'Could not send.', 'err'); return; }
-    if (d.customer && d.customer.id) clearDraft('itinerary', d.customer.id);
+    clearCurrentDraft();
     var num = (r.data && r.data.itinerary_number) || d.editing_number || '';
     state.itinFlash = { kind: 'ok', text: editing ? ('Itinerary ' + num + ' updated — the version in ' + fullName(d.customer) + '’s account is now current.') : ('Itinerary ' + num + ' sent to ' + fullName(d.customer) + '. It is now in their account.') };
     state.docCustomer = null; state.itinDraft = null; state.itinView = 'form'; renderTab();
