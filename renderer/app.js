@@ -1457,6 +1457,7 @@
       rows.appendChild(row);
     }
     ('' + (opts.value || '')).split(/\n|,/).map(parseTravelerLine).filter(Boolean).forEach(addRow);
+    if (!rows.children.length) addRow(opts.seed || null);
     wrap = h('div', { class: 'trav-wrap' }, [
       hidden,
       h('div', { class: 'trav-head' }, [h('span', { text: 'Title' }), h('span', { text: 'First name' }), h('span', { text: 'Last name' }), h('span', { text: 'Type' }), h('span')]),
@@ -1679,10 +1680,12 @@
       return;
     }
     var type = typeEl.value || 'round';
+    var addRet = document.getElementById('inv-add-return');
     if (add) add.textContent = type === 'round' ? '+ Add another flight (make it multi-city)' : '+ Add flight';
+    if (addRet) addRet.style.display = (type === 'multi') ? '' : 'none';
     Array.prototype.forEach.call(cards, function (card, i) {
       var role = card.querySelector('.seg-role'), label;
-      if (type === 'round') label = i === 0 ? 'Outbound flight' : (i === 1 ? 'Return flight' : 'Flight ' + (i + 1));
+      if (type === 'round') label = i === 0 ? 'Outbound flight' : ((i === cards.length - 1 && cards.length > 1) ? 'Return flight' : 'Flight ' + (i + 1));
       else if (type === 'one_way') label = cards.length > 1 ? 'Flight ' + (i + 1) : 'Flight details';
       else label = 'Flight ' + (i + 1);
       if (role) role.textContent = label;
@@ -1692,9 +1695,37 @@
     var plain = !!(opts && opts.plain); /* group trips: no round/one-way/multi control, just a flight list */
     var kids = [];
     if (!plain) kids.push(tripTypeControl(tripType));
+    /* a round trip is always outbound + return, so open both rows by default */
+    if (!plain && (tripType || 'round') === 'round' && segs.length < 2) segs = [segs[0] || null, null];
     kids.push(h('div', { id: 'inv-segs', class: 'inv-segs' }, segs.map(segRow)));
-    kids.push(h('button', { type: 'button', id: 'inv-add-flight', class: 'inv-addline', onclick: function () { var r = segRow(); document.getElementById('inv-segs').appendChild(r); relabelSegs(); initDatePickers(r); }, text: '+ Add flight' }));
+    if (plain) {
+      kids.push(h('button', { type: 'button', id: 'inv-add-flight', class: 'inv-addline', onclick: function () { var r = segRow(); document.getElementById('inv-segs').appendChild(r); relabelSegs(); initDatePickers(r); }, text: '+ Add flight' }));
+    } else {
+      kids.push(h('div', { class: 'flight-add-row' }, [
+        h('button', { type: 'button', id: 'inv-add-flight', class: 'inv-addline', onclick: function () { addFlight(false); }, text: '+ Add flight' }),
+        h('button', { type: 'button', id: 'inv-add-return', class: 'inv-addline', style: 'display:none', onclick: function () { addFlight(true); }, text: '+ Add return flight' })
+      ]));
+    }
     return h('div', { class: 'flights-wrap' }, kids);
+  }
+  /* outbound stays first, return stays last: a mid-trip add lands before the return leg */
+  function addFlight(isReturn) {
+    var list = document.getElementById('inv-segs'); if (!list) return;
+    var type = (document.getElementById('trip-type') || {}).value || '';
+    var cards = list.querySelectorAll('.seg-card'), r;
+    if (isReturn) { r = returnLegFromList(list); list.appendChild(r); }
+    else if (type === 'round' && cards.length >= 2) { r = segRow(); list.insertBefore(r, cards[cards.length - 1]); }
+    else { r = segRow(); list.appendChild(r); }
+    relabelSegs(); initDatePickers(r);
+  }
+  function returnLegFromList(list) {
+    var cards = list.querySelectorAll('.seg-card');
+    if (!cards.length) return segRow();
+    var first = cards[0], last = cards[cards.length - 1];
+    var lw = last.querySelectorAll('.ap-wrap'), fw = first.querySelectorAll('.ap-wrap');
+    var to = lw[1] && lw[1]._selected, from = fw[0] && fw[0]._selected;
+    var cab = first.querySelector('.ss input[type=hidden]');
+    return segRow({ from: to || null, to: from || null, cabin: cab ? cab.value : null });
   }
   function setLk(el, msg, kind) { if (!el) return; el.textContent = msg; el.className = 'seg-lookup-status' + (kind ? ' lk-' + kind : ''); }
   function fillAirport(wrap, iata) {
@@ -1944,6 +1975,16 @@
   var _saveT = null;
   function scheduleSave() { if (!state.docCustomer || !state.docCustomer.id) return; if (['invoices', 'quotes', 'itineraries'].indexOf(state.tab) < 0) return; clearTimeout(_saveT); _saveT = setTimeout(autoSaveDraft, 1200); }
   document.addEventListener('input', scheduleSave);
+  /* auto-capitalize typed text fields on blur; skips emails, URLs, flight numbers and codes */
+  document.addEventListener('blur', function (e) {
+    var el = e.target;
+    if (!el || el.tagName !== 'INPUT' || (el.type !== 'text' && el.type !== 'search')) return;
+    if (!el.classList || !el.classList.contains('inv-input')) return;
+    if (/seg-flightno|seg-conf|seg-etkt|seg-opby|doc-url|list-search|gs-input|seat-input|itin-pull-inv|inv-line-amt/.test(el.className)) return;
+    var v = el.value; if (!v || /@/.test(v) || /^https?:/i.test(v)) return;
+    var cap = v.replace(/(^|[\s\-\/(])([a-z])/g, function (m, p, c) { return p + c.toUpperCase(); });
+    if (cap !== v) el.value = cap;
+  }, true);
   document.addEventListener('change', scheduleSave);
   function tabInvoices() {
     enterDoc('invoice');
@@ -3376,11 +3417,11 @@
       h('div', { class: 'inv-section' }, [h('h3', { class: 'inv-h3', text: 'Customer' }), customerSearch(), custBox]),
       h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'Trip' }),
-        h('div', { class: 'inv-row2' }, [invField('Trip title', 'itin-title', 'text', 'e.g. Dubai First Class Getaway', d.title), cityField('Destination', '', d.destination, 'Start typing a city…', 'itin-dest')]),
-        h('div', { class: 'inv-row2' }, [invField('Trip starts', 'itin-start', 'date', '', d.start_date), invField('Trip ends', 'itin-end', 'date', '', d.end_date)]),
+        invField('Trip title', 'itin-title', 'text', 'e.g. Dubai First Class Getaway', d.title),
+        h('p', { class: 'inv-sublabel', style: 'margin:6px 0 0', text: 'Destination and dates fill in automatically from the flights below.' }),
         h('p', { class: 'inv-sublabel', style: 'margin-top:16px', text: 'Travelers' }),
         h('div', { class: 'inv-row3' }, [paxField('Adults (12+)', 'itin-adults', d.pax_adults != null ? d.pax_adults : 1), paxField('Children (2–11)', 'itin-children', d.pax_children != null ? d.pax_children : 0), paxField('Infants (under 2)', 'itin-infants', d.pax_infants != null ? d.pax_infants : 0)]),
-        h('div', { class: 'inv-field', style: 'margin-top:14px' }, [h('span', { text: 'Traveler names (optional). Shown on the itinerary; the counts above fill in automatically.' }), travelerRows({ id: 'itin-names', value: d.traveler_names || '', onChange: function (c, total) { if (!total) return; var a = document.getElementById('itin-adults'), ch = document.getElementById('itin-children'), inf = document.getElementById('itin-infants'); if (a) a.value = c.Adult || 0; if (ch) ch.value = c.Child || 0; if (inf) inf.value = c.Infant || 0; } })])
+        h('div', { class: 'inv-field', style: 'margin-top:14px' }, [h('span', { text: 'Traveler names (optional). Shown on the itinerary; the counts above fill in automatically.' }), travelerRows({ id: 'itin-names', value: d.traveler_names || '', seed: state.docCustomer ? { title: state.docCustomer.title || 'Mr', first: state.docCustomer.first_name || '', last: state.docCustomer.last_name || '', type: 'Adult' } : null, onChange: function (c, total) { if (!total) return; var a = document.getElementById('itin-adults'), ch = document.getElementById('itin-children'), inf = document.getElementById('itin-infants'); if (a) a.value = c.Adult || 0; if (ch) ch.value = c.Child || 0; if (inf) inf.value = c.Infant || 0; } })])
       ]),
       h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'Flights' }),
@@ -3409,10 +3450,24 @@
     setTimeout(function () { if (state.docCustomer) renderResolved(state.docCustomer); loadTemplates(); applyTripType(detectTripType(d)); initDatePickers(form); }, 0);
     return form;
   }
+  function deriveTripMeta(segs, hotels) {
+    segs = segs || []; hotels = hotels || [];
+    var origin = segs[0] && segs[0].from && segs[0].from.code, seen = {}, cities = [];
+    segs.forEach(function (sg) { var t = sg && sg.to; if (t && t.code && t.code !== origin && t.city && !seen[t.code]) { seen[t.code] = 1; cities.push(t.city); } });
+    if (!cities.length) hotels.forEach(function (hx) { var c = ((hx.location || '').split(',')[0] || '').trim(); if (c && cities.indexOf(c) < 0) cities.push(c); });
+    var dest = cities.slice(0, 3).join(' & ') || (segs[0] && segs[0].to && segs[0].to.city) || null;
+    var starts = segs.map(function (sg) { return sg && sg.depart_date; }).filter(Boolean);
+    hotels.forEach(function (hx) { if (hx.checkin_date) starts.push(hx.checkin_date); });
+    var ends = segs.map(function (sg) { return sg && (admArriveDate(sg) || sg.arrive_date || sg.depart_date); }).filter(Boolean);
+    hotels.forEach(function (hx) { if (hx.checkout_date) ends.push(hx.checkout_date); });
+    starts.sort(); ends.sort();
+    return { destination: dest, start: starts[0] || null, end: ends[ends.length - 1] || null };
+  }
   function collectItin() {
     var pa = parseInt(val('itin-adults'), 10); if (isNaN(pa)) pa = 0;
     var pc = parseInt(val('itin-children'), 10) || 0, pi = parseInt(val('itin-infants'), 10) || 0;
-    return { customer: state.docCustomer, title: val('itin-title'), destination: val('itin-dest'), start_date: val('itin-start') || null, end_date: val('itin-end') || null, pax_adults: pa, pax_children: pc, pax_infants: pi, passengers: (pa + pc + pi) || 1, traveler_names: val('itin-names') || null, trip_type: readTripType(), segments: readSegments(), hotels: readCards('itin-hotels', 'hotel'), transport: readCards('itin-transport', 'transport'), entertainment: readCards('itin-dining', 'dining').concat(readCards('itin-ent', 'ent')), cruises: readCards('itin-cruises', 'cruise'), day_notes: readCards('itin-days', 'day'), documents: readCards('itin-docs', 'doc'), notes: val('itin-notes'), total_charged: parseFloat(val('itin-total')) || null, comparable_total: parseFloat(val('itin-comp')) || null, currency: val('itin-cur') || (state.settings && state.settings.default_currency) || 'USD', price_invoice_number: val('itin-pull-inv') || null };
+    var _segs = readSegments(); var _hotels = readCards('itin-hotels', 'hotel'); var _meta = deriveTripMeta(_segs, _hotels);
+    return { customer: state.docCustomer, title: val('itin-title'), destination: _meta.destination, start_date: _meta.start, end_date: _meta.end, pax_adults: pa, pax_children: pc, pax_infants: pi, passengers: (pa + pc + pi) || 1, traveler_names: val('itin-names') || null, trip_type: readTripType(), segments: _segs, hotels: _hotels, transport: readCards('itin-transport', 'transport'), entertainment: readCards('itin-dining', 'dining').concat(readCards('itin-ent', 'ent')), cruises: readCards('itin-cruises', 'cruise'), day_notes: readCards('itin-days', 'day'), documents: readCards('itin-docs', 'doc'), notes: val('itin-notes'), total_charged: parseFloat(val('itin-total')) || null, comparable_total: parseFloat(val('itin-comp')) || null, currency: val('itin-cur') || (state.settings && state.settings.default_currency) || 'USD', price_invoice_number: val('itin-pull-inv') || null };
   }
   async function pullInvoicePricing() {
     var num = (val('itin-pull-inv') || '').trim(), status = document.getElementById('itin-pull-status');
