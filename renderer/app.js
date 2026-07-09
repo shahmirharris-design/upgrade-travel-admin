@@ -1556,6 +1556,7 @@
     });
     return out;
   }
+  function bookedCtx() { return state.builderTab === 'itinerary' || state.pkgBuilding || state.gtBuilding; }
   function segRow(seg) {
     var cabinVal = (seg && seg.cabin) || (state.settings && state.settings.default_cabin) || 'Business Class';
     var rich = state.builderTab === 'itinerary' || state.pkgBuilding || state.gtBuilding;
@@ -2195,6 +2196,11 @@
         ]);
       })));
     }
+    function qdSec(title, arr, lineFn) { if (!arr || !arr.length) return; node.appendChild(h('h4', { class: 'qd-h', text: title })); arr.forEach(function (x) { node.appendChild(h('div', { class: 'qd-seg' }, lineFn(x))); }); }
+    qdSec('Hotels', q.hotels, function (x) { return [h('div', { class: 'rev-strong', text: x.name || 'Hotel' }), h('div', { class: 'rev-line', text: [x.location, x.room, x.board, (x.checkin_date ? fmtDate(x.checkin_date) : '')].filter(Boolean).join('  ·  ') })]; });
+    qdSec('Transfers', q.transport, function (x) { return [h('div', { class: 'rev-strong', text: x.type || 'Transfer' }), h('div', { class: 'rev-line', text: [[x.from, x.to].filter(Boolean).join(' → '), (x.date ? fmtDate(x.date) : '')].filter(Boolean).join('  ·  ') })]; });
+    qdSec('Dining & experiences', q.entertainment, function (x) { return [h('div', { class: 'rev-strong', text: x.name || 'Experience' }), h('div', { class: 'rev-line', text: [x.category, x.location, (x.date ? fmtDate(x.date) : '')].filter(Boolean).join('  ·  ') })]; });
+    qdSec('Cruises', q.cruises, function (x) { return [h('div', { class: 'rev-strong', text: [x.line, x.ship].filter(Boolean).join('  ·  ') || 'Cruise' }), h('div', { class: 'rev-line', text: [[x.embark_port, x.disembark_port].filter(Boolean).join(' → '), (x.embark_date ? fmtDate(x.embark_date) : '')].filter(Boolean).join('  ·  ') })]; });
     if (q.line_items && q.line_items.length) {
       node.appendChild(h('h4', { class: 'qd-h', text: 'Quote' }));
       node.appendChild(h('table', { class: 'qd-table' }, q.line_items.map(function (it) { return h('tr', null, [h('td', { text: it.label + (it.detail ? ' — ' + it.detail : '') }), h('td', { class: 'qd-amt', text: money(it.amount, q.currency) })]); })));
@@ -2225,7 +2231,7 @@
   function editQuote(q) {
     state.docCustomer = findCustomerForDoc(q);
     state.builderTab = 'quote'; state.docKind = 'quote';
-    state.draftId = null; state.docDraft = { editing_id: q.id, editing_number: q.quote_number, title: q.title || '', destination: q.destination || '', trip_type: q.trip_type || null, segments: q.segments || [], pax_adults: q.pax_adults != null ? q.pax_adults : 1, pax_children: q.pax_children || 0, pax_infants: q.pax_infants || 0, booking_reference: q.booking_reference || '', line_items: q.line_items || [], currency: q.currency || 'USD', comparable_total: q.comparable_total || null, valid_until: q.valid_until || null, options: q.options || [], notes: q.notes || '' };
+    state.draftId = null; state.docDraft = { editing_id: q.id, editing_number: q.quote_number, title: q.title || '', destination: q.destination || '', trip_type: q.trip_type || null, segments: q.segments || [], pax_adults: q.pax_adults != null ? q.pax_adults : 1, pax_children: q.pax_children || 0, pax_infants: q.pax_infants || 0, booking_reference: q.booking_reference || '', line_items: q.line_items || [], currency: q.currency || 'USD', comparable_total: q.comparable_total || null, valid_until: q.valid_until || null, options: q.options || [], hotels: q.hotels || [], transport: q.transport || [], entertainment: q.entertainment || [], cruises: q.cruises || [], notes: q.notes || '' };
     state.docFlash = { kind: 'note', text: 'Editing ' + (q.quote_number || 'this quote') + '. Make your changes, then review & resend — it updates the same quote.' };
     state.docView = 'form'; state.tab = 'quotes'; refreshNav(); renderTab();
   }
@@ -2275,7 +2281,7 @@
   function duplicateQuote(q) {
     state.docCustomer = findCustomerForDoc(q);
     state.builderTab = 'quote'; state.docKind = 'quote';
-    state.docDraft = { title: q.title || '', destination: q.destination || '', trip_type: q.trip_type || null, segments: q.segments || [], pax_adults: q.pax_adults != null ? q.pax_adults : 1, pax_children: q.pax_children || 0, pax_infants: q.pax_infants || 0, booking_reference: q.booking_reference || '', line_items: q.line_items || [], currency: q.currency || 'USD', comparable_total: q.comparable_total || null, valid_until: null, options: q.options || [], notes: q.notes || '' };
+    state.docDraft = { title: q.title || '', destination: q.destination || '', trip_type: q.trip_type || null, segments: q.segments || [], pax_adults: q.pax_adults != null ? q.pax_adults : 1, pax_children: q.pax_children || 0, pax_infants: q.pax_infants || 0, booking_reference: q.booking_reference || '', line_items: q.line_items || [], currency: q.currency || 'USD', comparable_total: q.comparable_total || null, valid_until: null, options: q.options || [], hotels: q.hotels || [], transport: q.transport || [], entertainment: q.entertainment || [], cruises: q.cruises || [], notes: q.notes || '' };
     state.draftId = null;
     state.docFlash = { kind: 'note', text: 'Duplicated from ' + (q.quote_number || 'the quote') + '. Adjust anything, then send as a new quote.' };
     state.docView = 'form'; state.tab = 'quotes'; refreshNav(); renderTab();
@@ -2312,7 +2318,7 @@
     /* the quote already knows the pricing — carry it so the savings hero renders without re-entry */
     var total = q.total_charged != null ? q.total_charged : (q.line_items || []).reduce(function (s, i) { return s + (parseFloat(i.amount) || 0); }, 0) || null;
     state.builderTab = 'itinerary';
-    state.itinDraft = { title: q.title || '', destination: q.destination || '', trip_type: q.trip_type || null, start_date: s0 ? s0.depart_date : null, end_date: sN ? (sN.return_date || sN.depart_date) : null, pax_adults: q.pax_adults != null ? q.pax_adults : 1, pax_children: q.pax_children || 0, pax_infants: q.pax_infants || 0, segments: segs, hotels: [], transport: [], entertainment: [], notes: q.notes || '', total_charged: total, comparable_total: q.comparable_total || null, currency: q.currency || 'USD' };
+    state.itinDraft = { title: q.title || '', destination: q.destination || '', trip_type: q.trip_type || null, start_date: s0 ? s0.depart_date : null, end_date: sN ? (sN.return_date || sN.depart_date) : null, pax_adults: q.pax_adults != null ? q.pax_adults : 1, pax_children: q.pax_children || 0, pax_infants: q.pax_infants || 0, segments: segs, hotels: q.hotels || [], transport: q.transport || [], entertainment: q.entertainment || [], cruises: q.cruises || [], notes: q.notes || '', total_charged: total, comparable_total: q.comparable_total || null, currency: q.currency || 'USD' };
     state.itinFlash = { kind: 'note', text: 'Started from quote ' + (q.quote_number || '') + ' — pricing carried over. Add hotels, transfers & experiences.' };
     state.itinView = 'form'; state.tab = 'itineraries'; refreshNav(); renderTab();
   }
@@ -2727,6 +2733,17 @@
   }
   function currencySelect(cur) { return styledSelect('inv-cur', cur || (state.settings && state.settings.default_currency) || 'USD', CURRENCIES.map(function (c) { return { v: c.code, l: c.name, r: c.sym, b: c.code + '  ' + c.sym }; }), recalc); }
   function totalRow(label, id, big) { return h('div', { class: 'inv-total' + (big ? ' inv-total-big' : '') }, [h('span', { class: 'inv-total-k', text: label }), h('span', { class: 'inv-total-v', id: id, text: '—' })]); }
+  function quotePkgSections(d) {
+    d = d || {};
+    return h('div', { class: 'quote-pkg' }, [
+      h('div', { class: 'inv-section quote-pkg-lead' }, [h('p', { class: 'inv-sublabel', style: 'margin:0', text: 'Optional — build out the whole package. Everything here shows on the quote; booking references and seat numbers are only asked for later, on the itinerary.' })]),
+      itinSection('Hotels', 'itin-hotels', (d.hotels || []).map(hotelCard), '+ Add hotel', function () { var c = hotelCard(); document.getElementById('itin-hotels').appendChild(c); initDatePickers(c); }),
+      itinSection('Transportation', 'itin-transport', (d.transport || []).map(transportCard), '+ Add transport', function () { var c = transportCard(); document.getElementById('itin-transport').appendChild(c); initDatePickers(c); }),
+      itinSection('Dining', 'itin-dining', (d.entertainment || []).filter(function (x) { return x.kind === 'dining'; }).map(diningCard), '+ Add dining', function () { var c = diningCard(); document.getElementById('itin-dining').appendChild(c); initDatePickers(c); }),
+      itinSection('Experiences', 'itin-ent', (d.entertainment || []).filter(function (x) { return x.kind !== 'dining'; }).map(entCard), '+ Add experience', function () { var c = entCard(); document.getElementById('itin-ent').appendChild(c); initDatePickers(c); }),
+      itinSection('Cruises', 'itin-cruises', (d.cruises || []).map(cruiseCard), '+ Add cruise', function () { var c = cruiseCard(); document.getElementById('itin-cruises').appendChild(c); initDatePickers(c); })
+    ]);
+  }
   function docForm(d) {
     d = d || {};
     var segs = (d.segments && d.segments.length) ? d.segments : [null];
@@ -2757,6 +2774,7 @@
         h('div', { class: 'inv-row3' }, [paxField('Adults (12+)', 'inv-adults', d.pax_adults != null ? d.pax_adults : 1), paxField('Children (2–11)', 'inv-children', d.pax_children != null ? d.pax_children : 0), paxField('Infants (under 2)', 'inv-infants', d.pax_infants != null ? d.pax_infants : 0)]),
         h('div', { style: 'margin-top:14px' }, [invField('Booking reference (optional)', 'inv-ref', 'text', 'PNR / confirmation', d.booking_reference)])
       ]),
+      state.docKind === 'quote' ? quotePkgSections(d) : null,
       h('div', { class: 'inv-section' }, [
         h('h3', { class: 'inv-h3', text: 'Line items' }),
         h('div', { class: 'inv-line-head' }, [h('span', { text: 'Description' }), h('span', { text: 'Detail' }), h('span', { text: 'Amount' }), h('span')]),
@@ -2790,7 +2808,7 @@
       h('div', { class: 'inv-section' }, [h('h3', { class: 'inv-h3', text: 'Notes (optional)' }), h('textarea', { id: 'inv-notes', class: 'inv-input inv-textarea', rows: '2', placeholder: 'Anything the customer should know.', value: d.notes || '' })]),
       h('div', { class: 'inv-submit' }, [h('span', { id: 'draft-ind', class: 'draft-ind', text: 'Auto-saving to this customer' }), h('div', { id: 'inv-msg', class: 'msg', style: 'display:none' }), h('button', { type: 'button', class: 'btn btn-ghost', style: 'width:auto', onclick: function (e) { saveDraftNow(e.target); }, text: 'Save draft' }), h('button', { type: 'submit', class: 'btn btn-primary', style: 'width:auto; padding:13px 30px', text: 'Create & review' })])
     ]);
-    setTimeout(function () { if (state.docCustomer) renderResolved(state.docCustomer); recalc(); loadTemplates(); applyTripType(detectTripType(d)); }, 0);
+    setTimeout(function () { if (state.docCustomer) renderResolved(state.docCustomer); recalc(); loadTemplates(); applyTripType(detectTripType(d)); initDatePickers(form); }, 0);
     return form;
   }
   function fillDepositPct() {
@@ -2862,7 +2880,8 @@
     var pa = parseInt(val('inv-adults'), 10); if (isNaN(pa)) pa = 0;
     var pc = parseInt(val('inv-children'), 10) || 0, pi = parseInt(val('inv-infants'), 10) || 0;
     var dest = segs.length ? (segs[0].to.city + ', ' + segs[0].to.country) : null;
-    return { customer: state.docCustomer, request_id: state.docDraft && state.docDraft.request_id || null, source_quote_id: state.docDraft && state.docDraft.source_quote_id || null, editing_id: state.docDraft && state.docDraft.editing_id || null, editing_number: state.docDraft && state.docDraft.editing_number || null, title: val('inv-title'), destination: dest, trip_type: tripType, segments: segs, pax_adults: pa, pax_children: pc, pax_infants: pi, passengers: (pa + pc + pi) || 1, booking_reference: val('inv-ref'), line_items: items, currency: val('inv-cur') || 'USD', comparable_total: parseFloat(val('inv-comp')) || null, deposit_paid: parseFloat(val('inv-deposit')) || null, net_cost: parseFloat(val('inv-cost')) || null, due_date: val('inv-due') || null, valid_until: val('inv-valid') || null, options: readQuoteOptions(), payment_methods: state.docKind === 'invoice' ? Array.prototype.map.call(document.querySelectorAll('.payopt-cb:checked'), function (el) { return el.value; }) : undefined, notes: val('inv-notes') };
+    var qpkg = state.docKind === 'quote' ? { hotels: readCards('itin-hotels', 'hotel'), transport: readCards('itin-transport', 'transport'), entertainment: readCards('itin-dining', 'dining').concat(readCards('itin-ent', 'ent')), cruises: readCards('itin-cruises', 'cruise') } : { hotels: [], transport: [], entertainment: [], cruises: [] };
+    return { customer: state.docCustomer, request_id: state.docDraft && state.docDraft.request_id || null, source_quote_id: state.docDraft && state.docDraft.source_quote_id || null, editing_id: state.docDraft && state.docDraft.editing_id || null, editing_number: state.docDraft && state.docDraft.editing_number || null, title: val('inv-title'), destination: dest, trip_type: tripType, segments: segs, hotels: qpkg.hotels, transport: qpkg.transport, entertainment: qpkg.entertainment, cruises: qpkg.cruises, pax_adults: pa, pax_children: pc, pax_infants: pi, passengers: (pa + pc + pi) || 1, booking_reference: val('inv-ref'), line_items: items, currency: val('inv-cur') || 'USD', comparable_total: parseFloat(val('inv-comp')) || null, deposit_paid: parseFloat(val('inv-deposit')) || null, net_cost: parseFloat(val('inv-cost')) || null, due_date: val('inv-due') || null, valid_until: val('inv-valid') || null, options: readQuoteOptions(), payment_methods: state.docKind === 'invoice' ? Array.prototype.map.call(document.querySelectorAll('.payopt-cb:checked'), function (el) { return el.value; }) : undefined, notes: val('inv-notes') };
   }
   /* a "round trip" with only one filled flight would silently send as a one-way — stop it */
   function roundTripGap(d) { return d.trip_type === 'round' && (d.segments || []).length === 1; }
@@ -2878,6 +2897,13 @@
     state.docDraft = d; state.docView = 'review'; renderTab();
   }
   function tline(k, v, due) { return h('div', { class: 'rev-tline' + (due ? ' rev-tline-due' : '') }, [h('span', { text: k }), h('span', { text: v })]); }
+  function pkgReviewInto(docEl, d) {
+    function sec(title, arr, lineFn) { if (!arr || !arr.length) return; docEl.appendChild(h('div', { class: 'rev-routing' }, [h('h4', { class: 'rev-h4', text: title }), h('div', { class: 'rev-segs' }, arr.map(lineFn))])); }
+    sec('Hotels', d.hotels, function (x) { return h('div', { class: 'rev-seg' }, [h('div', { class: 'rev-seg-air', text: x.name || 'Hotel' }), h('div', { class: 'rev-seg-cities', text: [x.location, x.room, x.board].filter(Boolean).join('  ·  ') }), (x.checkin_date || x.checkout_date) ? h('div', { class: 'rev-seg-date', text: [x.checkin_date ? fmtDate(x.checkin_date) : '', x.checkout_date ? fmtDate(x.checkout_date) : ''].filter(Boolean).join(' – ') }) : null]); });
+    sec('Transfers', d.transport, function (x) { return h('div', { class: 'rev-seg' }, [h('div', { class: 'rev-seg-air', text: x.type || 'Transfer' }), h('div', { class: 'rev-seg-cities', text: [x.from, x.to].filter(Boolean).join(' → ') }), x.date ? h('div', { class: 'rev-seg-date', text: fmtDate(x.date) }) : null]); });
+    sec('Dining & experiences', d.entertainment, function (x) { return h('div', { class: 'rev-seg' }, [h('div', { class: 'rev-seg-air', text: x.name || 'Experience' }), h('div', { class: 'rev-seg-cities', text: [x.category, x.location].filter(Boolean).join('  ·  ') }), x.date ? h('div', { class: 'rev-seg-date', text: fmtDate(x.date) }) : null]); });
+    sec('Cruises', d.cruises, function (x) { return h('div', { class: 'rev-seg' }, [h('div', { class: 'rev-seg-air', text: [x.line, x.ship].filter(Boolean).join('  ·  ') || 'Cruise' }), h('div', { class: 'rev-seg-cities', text: [x.embark_port, x.disembark_port].filter(Boolean).join(' → ') }), x.embark_date ? h('div', { class: 'rev-seg-date', text: fmtDate(x.embark_date) }) : null]); });
+  }
   function reviewDoc(d) {
     var c = dcfg(), kind = state.docKind, total = d.line_items.reduce(function (s, i) { return s + i.amount; }, 0), cur = d.currency, p = d.customer;
     var wrap = h('div', { class: 'inv-review' });
@@ -2901,6 +2927,7 @@
         return h('div', { class: 'rev-seg' }, [h('div', { class: 'rev-seg-route' }, [h('b', { text: s.from.code }), h('span', { class: 'rev-seg-arrow', text: '→' }), h('b', { text: s.to.code })]), h('div', { class: 'rev-seg-cities', text: s.from.city + ' to ' + s.to.city }), (s.airline || s.cabin) ? h('div', { class: 'rev-seg-air', text: [s.airline, s.cabin].filter(Boolean).join(' · ') }) : null, s.depart_date ? h('div', { class: 'rev-seg-date', text: fmtDate(s.depart_date) + (s.return_date ? ' – ' + fmtDate(s.return_date) : '') }) : null]);
       }))]));
     }
+    if (kind === 'quote') pkgReviewInto(docEl, d);
     var rows = d.line_items.map(function (it) { return h('div', { class: 'rev-item' }, [h('div', { class: 'rev-item-label' }, [h('div', { class: 'rev-strong', text: it.label }), it.detail ? h('div', { class: 'rev-item-detail', text: it.detail }) : null]), h('div', { class: 'rev-item-amt', text: money(it.amount, cur) })]); });
     docEl.appendChild(h('div', { class: 'rev-items' }, [h('div', { class: 'rev-item rev-item-head' }, [h('div', { text: 'Description' }), h('div', { text: 'Amount' })])].concat(rows)));
     var totalsEls;
@@ -2935,7 +2962,7 @@
       /* on an EDIT, recorded payments stay as they are — only fresh invoices start at the deposit */
       if (!editing) { payload.amount_paid = dep; if (total > 0 && dep >= total - 0.001) payload.paid_at = new Date().toISOString(); }
     }
-    else { payload.valid_until = d.valid_until || null; payload.options = (d.options && d.options.length) ? d.options : null; if (d.request_id) payload.request_id = d.request_id; }
+    else { payload.valid_until = d.valid_until || null; payload.options = (d.options && d.options.length) ? d.options : null; if (d.request_id) payload.request_id = d.request_id; payload.hotels = d.hotels || []; payload.transport = d.transport || []; payload.entertainment = d.entertainment || []; payload.cruises = d.cruises || []; }
     btn.disabled = true; btn.textContent = editing ? 'Resending…' : 'Sending…';
     var r;
     if (editing) { if (state.docKind === 'quote') payload.status = 'sent'; r = await sb.from(c.table).update(payload).eq('id', d.editing_id).select().maybeSingle(); }
@@ -3171,25 +3198,25 @@
       h('div', { class: 'inv-row2' }, [poiField('Hotel', 'h-name', x && x.name, 'e.g. Burj Al Arab', function (p, inp) { fillFromPoi(p, inp, 'h-location', 'h-address'); }, 'h-location'), cityField('City', 'h-location', x && x.location, 'Start typing a city…')]),
       addrField('Address', 'h-address', x && x.address, 'Auto-fills, or click to pick a location', 'h-name', 'h-location'),
       h('div', { class: 'inv-row2' }, [cdt('Check-in', 'h-cin-date', 'h-cin-time', x && x.checkin_date, x ? x.checkin_time : '15:00'), cdt('Check-out', 'h-cout-date', 'h-cout-time', x && x.checkout_date, x ? x.checkout_time : '11:00')]),
-      h('div', { class: 'inv-row2' }, [clabel('Room / suite', 'h-room', x && x.room, 'e.g. Royal Suite'), clabel('Confirmation no.', 'h-conf', x && x.confirmation, 'Optional')]),
+      bookedCtx() ? h('div', { class: 'inv-row2' }, [clabel('Room / suite', 'h-room', x && x.room, 'e.g. Royal Suite'), clabel('Confirmation no.', 'h-conf', x && x.confirmation, 'Optional')]) : clabel('Room / suite', 'h-room', x && x.room, 'e.g. Royal Suite'),
       h('div', { class: 'inv-row3' }, [
         h('label', { class: 'inv-field' }, [h('span', { text: 'Meals included' }), h('div', { class: 'h-board-wrap' }, [styledSelect(null, (x && x.board) || 'Not specified', BOARD_TYPES, null)])]),
         clabel('Rooms', 'h-rooms', x && x.rooms, 'e.g. 2 × Deluxe · 1 × Suite'),
         clabel('Hotel phone', 'h-phone', x && x.phone, 'Optional')
       ]),
       clabel('Notes', 'h-notes', x && x.notes, 'Optional'),
-      confField(x)
+      bookedCtx() ? confField(x) : null
     ]);
   }
   function transportCard(x) {
     return h('div', { class: 'itin-card', 'data-itin': 'transport' }, [itinRm(), cardImgKeep(x),
       h('div', { class: 'inv-row2' }, [h('label', { class: 'inv-field' }, [h('span', { text: 'Type' }), styledSelect(null, (x && x.type) || 'Chauffeur', TRANSPORT_TYPES, null)]), cdt('Date & time', 't-date', 't-time', x && x.date, x && x.time)]),
       h('div', { class: 'inv-row2' }, [poiField('From / pickup', 't-from', x && x.from, 'e.g. DXB Airport', null), poiField('To / dropoff', 't-to', x && x.to, 'e.g. Burj Al Arab', null)]),
-      h('p', { class: 'itin-opthint', text: 'Driver details — optional. Anything left blank is hidden from the customer.' }),
-      h('div', { class: 'inv-row3' }, [clabel('Driver name', 't-driver', x && x.driver, 'Optional'), clabel('Car', 't-car', x && x.car, 'e.g. Mercedes S-Class'), clabel('License plate', 't-plate', x && x.plate, 'Optional')]),
-      h('div', { class: 'inv-row3' }, [clabel('Provider / company', 't-company', x && x.company, 'e.g. Blacklane'), clabel('Provider phone', 't-phone', x && x.phone, 'Optional'), clabel('Confirmation no.', 't-conf', x && x.confirmation, 'Optional')]),
+      bookedCtx() ? h('p', { class: 'itin-opthint', text: 'Driver details — optional. Anything left blank is hidden from the customer.' }) : null,
+      bookedCtx() ? h('div', { class: 'inv-row3' }, [clabel('Driver name', 't-driver', x && x.driver, 'Optional'), clabel('Car', 't-car', x && x.car, 'e.g. Mercedes S-Class'), clabel('License plate', 't-plate', x && x.plate, 'Optional')]) : clabel('Car / vehicle', 't-car', x && x.car, 'e.g. Mercedes S-Class'),
+      bookedCtx() ? h('div', { class: 'inv-row3' }, [clabel('Provider / company', 't-company', x && x.company, 'e.g. Blacklane'), clabel('Provider phone', 't-phone', x && x.phone, 'Optional'), clabel('Confirmation no.', 't-conf', x && x.confirmation, 'Optional')]) : h('div', { class: 'inv-row2' }, [clabel('Provider / company', 't-company', x && x.company, 'e.g. Blacklane'), clabel('Provider phone', 't-phone', x && x.phone, 'Optional')]),
       clabel('Notes', 't-notes', x && x.notes, 'Optional'),
-      confField(x)
+      bookedCtx() ? confField(x) : null
     ]);
   }
   function diningCard(x) {
@@ -3197,9 +3224,9 @@
       h('div', { class: 'inv-row2' }, [poiField('Name', 'e-name', x && x.name, 'e.g. Nobu Dubai', function (p, inp) { fillFromPoi(p, inp, 'e-location', 'e-address'); }, 'e-location'), h('label', { class: 'inv-field' }, [h('span', { text: 'Type' }), styledSelect(null, (x && x.category) || 'Restaurant', DINING_CATEGORIES, null)])]),
       h('div', { class: 'inv-row2' }, [cityField('City', 'e-location', x && x.location, 'Start typing a city…'), cdt('Date & time', 'e-date', 'e-time', x && x.date, x && x.time)]),
       addrField('Address', 'e-address', x && x.address, 'Auto-fills, or click to pick a location', 'e-name', 'e-location'),
-      h('div', { class: 'inv-row3' }, [clabel('Confirmation no.', 'e-conf', x && x.confirmation, 'Optional'), clabel('Party size', 'e-party', x && x.party, 'e.g. 15'), clabel('Venue phone', 'e-phone', x && x.phone, 'Optional')]),
+      bookedCtx() ? h('div', { class: 'inv-row3' }, [clabel('Confirmation no.', 'e-conf', x && x.confirmation, 'Optional'), clabel('Party size', 'e-party', x && x.party, 'e.g. 15'), clabel('Venue phone', 'e-phone', x && x.phone, 'Optional')]) : h('div', { class: 'inv-row2' }, [clabel('Party size', 'e-party', x && x.party, 'e.g. 15'), clabel('Venue phone', 'e-phone', x && x.phone, 'Optional')]),
       clabel('Notes', 'e-notes', x && x.notes, 'Optional'),
-      confField(x)
+      bookedCtx() ? confField(x) : null
     ]);
   }
   function entCard(x) {
@@ -3207,20 +3234,20 @@
       h('div', { class: 'inv-row2' }, [poiField('Name', 'e-name', x && x.name, 'e.g. Desert safari', function (p, inp) { fillFromPoi(p, inp, 'e-location', 'e-address'); }, 'e-location'), h('label', { class: 'inv-field' }, [h('span', { text: 'Category' }), styledSelect(null, (x && x.category) || 'Experience', ENT_CATEGORIES, null)])]),
       h('div', { class: 'inv-row2' }, [cityField('City', 'e-location', x && x.location, 'Start typing a city…'), cdt('Date & time', 'e-date', 'e-time', x && x.date, x && x.time)]),
       addrField('Address', 'e-address', x && x.address, 'Auto-fills, or click to pick a location', 'e-name', 'e-location'),
-      h('div', { class: 'inv-row3' }, [clabel('Confirmation no.', 'e-conf', x && x.confirmation, 'Optional'), clabel('Party size', 'e-party', x && x.party, 'e.g. 15'), clabel('Venue phone', 'e-phone', x && x.phone, 'Optional')]),
+      bookedCtx() ? h('div', { class: 'inv-row3' }, [clabel('Confirmation no.', 'e-conf', x && x.confirmation, 'Optional'), clabel('Party size', 'e-party', x && x.party, 'e.g. 15'), clabel('Venue phone', 'e-phone', x && x.phone, 'Optional')]) : h('div', { class: 'inv-row2' }, [clabel('Party size', 'e-party', x && x.party, 'e.g. 15'), clabel('Venue phone', 'e-phone', x && x.phone, 'Optional')]),
       clabel('Notes', 'e-notes', x && x.notes, 'Optional'),
-      confField(x)
+      bookedCtx() ? confField(x) : null
     ]);
   }
   function cruiseCard(x) {
     return h('div', { class: 'itin-card', 'data-itin': 'cruise' }, [itinRm(), cardImgKeep(x),
       h('div', { class: 'inv-row2' }, [clabel('Cruise line', 'c-line', x && x.line, 'e.g. Explora Journeys'), clabel('Ship', 'c-ship', x && x.ship, 'e.g. Explora I')]),
-      h('div', { class: 'inv-row2' }, [clabel('Suite / cabin category', 'c-cabin', x && x.cabin, 'e.g. Ocean Terrace Suite'), clabel('Deck and cabin no.', 'c-deck', x && x.deck, 'e.g. Deck 8, 8014')]),
+      bookedCtx() ? h('div', { class: 'inv-row2' }, [clabel('Suite / cabin category', 'c-cabin', x && x.cabin, 'e.g. Ocean Terrace Suite'), clabel('Deck and cabin no.', 'c-deck', x && x.deck, 'e.g. Deck 8, 8014')]) : clabel('Suite / cabin category', 'c-cabin', x && x.cabin, 'e.g. Ocean Terrace Suite'),
       h('div', { class: 'inv-row2' }, [h('label', { class: 'inv-field' }, [h('span', { text: 'Embarkation port' }), cityInput('c-eport', x && x.embark_port, 'e.g. Civitavecchia (Rome)')]), cdt('Embarks', 'c-edate', 'c-etime', x && x.embark_date, x && x.embark_time)]),
       h('div', { class: 'inv-row2' }, [h('label', { class: 'inv-field' }, [h('span', { text: 'Disembarkation port' }), cityInput('c-dport', x && x.disembark_port, 'e.g. Piraeus (Athens)')]), cdt('Disembarks', 'c-ddate', 'c-dtime', x && x.disembark_date, x && x.disembark_time)]),
-      h('div', { class: 'inv-row2' }, [clabel('Booking no.', 'c-conf', x && x.confirmation, 'Optional'), clabel('Cruise line phone', 'c-phone', x && x.phone, 'Optional')]),
+      bookedCtx() ? h('div', { class: 'inv-row2' }, [clabel('Booking no.', 'c-conf', x && x.confirmation, 'Optional'), clabel('Cruise line phone', 'c-phone', x && x.phone, 'Optional')]) : clabel('Cruise line phone', 'c-phone', x && x.phone, 'Optional'),
       clabel('Notes', 'c-notes', x && x.notes, 'Ports of call, dress codes, included excursions'),
-      confField(x)
+      bookedCtx() ? confField(x) : null
     ]);
   }
   function dayCard(x) {
