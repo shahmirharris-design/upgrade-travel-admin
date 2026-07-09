@@ -83,12 +83,15 @@ function cmpVer(a, b) {
 
 function setupAutoUpdate() {
   if (!autoUpdater) return;
+  logUpdate('running version ' + app.getVersion());
   autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.on('checking-for-update', () => sendUpdateStatus({ state: 'checking' }));
   autoUpdater.on('update-available', (info) => sendUpdateStatus({ state: 'available', version: info && info.version }));
   autoUpdater.on('update-not-available', () => sendUpdateStatus({ state: 'none' }));
   autoUpdater.on('download-progress', (p) => sendUpdateStatus({ state: 'downloading', percent: Math.round((p && p.percent) || 0) }));
   autoUpdater.on('update-downloaded', async (info) => {
+    logUpdate('downloaded ' + (info && info.version));
     sendUpdateStatus({ state: 'downloaded', version: info && info.version });
     const win = BrowserWindow.getAllWindows()[0];
     const { response } = await dialog.showMessageBox(win, {

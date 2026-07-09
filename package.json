@@ -1,6 +1,6 @@
 {
   "name": "upgrade-travel-admin",
-  "version": "1.0.46",
+  "version": "1.0.47",
   "description": "Upgrade Travel \u2014 back-office admin app (customers, itineraries, quotes)",
   "author": "Upgrade Travel",
   "license": "UNLICENSED",
@@ -52,9 +52,9 @@
       }
     ],
     "nsis": {
-      "oneClick": false,
+      "oneClick": true,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": true
+      "allowElevation": false
     }
   },
   "dependencies": {
